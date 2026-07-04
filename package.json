@@ -1,0 +1,47 @@
+{
+  "name": "identican",
+  "version": "0.1.0",
+  "description": "Deterministic soda-can identicons as SVG strings",
+  "keywords": [
+    "identicon",
+    "avatar",
+    "svg",
+    "deterministic",
+    "generative"
+  ],
+  "author": "Jakub Vonášek",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jvonasek/identican.git"
+  },
+  "homepage": "https://github.com/jvonasek/identican#readme",
+  "bugs": "https://github.com/jvonasek/identican/issues",
+  "sideEffects": false,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --minify --outfile=dist/index.js",
+    "test": "npm run build && node --test",
+    "demo": "node scripts/demo.mjs",
+    "dev": "node --watch-path=./src scripts/demo.mjs",
+    "format": "prettier --write .",
+    "prepublishOnly": "npm test"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "26.0.1",
+    "esbuild": "0.28.1",
+    "prettier": "3.9.1",
+    "typescript": "^5.5.0"
+  }
+}
