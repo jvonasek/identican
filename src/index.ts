@@ -425,7 +425,9 @@ export function identican(seed: string, options: IdenticanOptions = {}): string 
     hsl(
       h + hue,
       Math.min(100, Math.max(0, s * saturation)),
-      Math.min(100, Math.max(0, l * lightness)),
+      // cap below 100 so a high lightness knob never washes a color to pure
+      // white — keep at least a sliver of the hue
+      Math.min(92, Math.max(0, l * lightness)),
     )
 
   // fixed draw order — see note on mulberry32
