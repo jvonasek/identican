@@ -393,6 +393,11 @@ const LABEL_D =
   `M ${L.x} ${L.y} A ${RX} ${EDGE_RY} 0 0 0 ${L.x + L.w} ${L.y} ` +
   `L ${L.x + L.w} ${L.y + L.h} A ${RX} ${EDGE_RY} 0 0 1 ${L.x} ${L.y + L.h} Z`
 
+// Memoization: identican is pure (same inputs → identical SVG), so results are
+// cached. Bounded FIFO — drop the oldest entry past the cap; an LRU isn't worth it.
+const CACHE_MAX = 1000
+const cache = new Map<string, string>()
+
 /** Generate a deterministic soda-can identicon for a seed string, as an SVG markup string. */
 export function identican(seed: string, options: IdenticanOptions = {}): string {
   const {
@@ -403,6 +408,9 @@ export function identican(seed: string, options: IdenticanOptions = {}): string 
     saturation = 1,
     lightness = 1,
   } = options
+  const key = [seed, size, background, hue, saturation, lightness, title].join(" ")
+  const hit = cache.get(key)
+  if (hit !== undefined) return hit
   const sizeN = Number(size)
   const sizeAttr = Number.isFinite(sizeN) ? sizeN : 128
   const hash = fnv1a(seed)
@@ -452,7 +460,7 @@ export function identican(seed: string, options: IdenticanOptions = {}): string 
   const canColor = col(canHue, 60, 52)
 
   const bgFill = background === "gradient" ? `url(#${id}-bg)` : bgA
-  return (
+  const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${sizeAttr}" height="${sizeAttr}" viewBox="0 0 1524 1524" role="img" ${
       title ? `aria-label="${esc(String(title))}"` : `aria-hidden="true"`
     }>` +
@@ -485,7 +493,9 @@ export function identican(seed: string, options: IdenticanOptions = {}): string 
     `<path d="${TEMPLATE_D}" fill="#000" fill-rule="evenodd"/>` +
     `</g>` +
     `</svg>`
-  )
+  if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value as string)
+  cache.set(key, svg)
+  return svg
 }
 
 /** identican() output as a data: URI, ready to use as an <img> src. */

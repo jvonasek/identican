@@ -8,6 +8,19 @@ test("same seed produces identical output", () => {
   assert.equal(identican("hello"), identican("hello"))
 })
 
+test("memoized result matches a fresh computation for the same options", () => {
+  const opts = { size: 64, hue: 90, saturation: 0.8 }
+  const first = identican("cachecheck", opts) // populates cache
+  const second = identican("cachecheck", opts) // cache hit
+  assert.equal(first, second)
+})
+
+test("cache key distinguishes options — different options are not aliased", () => {
+  const a = identican("aliascheck", { size: 64 })
+  const b = identican("aliascheck", { size: 65 })
+  assert.notEqual(a, b) // would be equal if size were missing from the key
+})
+
 test("different seeds produce different output", () => {
   assert.notEqual(identican("hello"), identican("world"))
 })
