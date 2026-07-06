@@ -1,0 +1,96 @@
+<% layout("./layout") %>
+<%~ include("./header", it) %>
+<%~ include("./try", it) %>
+<hr class="border-zinc-200 dark:border-zinc-700">
+<%~ include("./gallery", it) %>
+
+<% block("scripts", () => { %>
+<script>
+<%~ it.lib %>
+const themeKey = "identican-theme";
+const themeSwitcher = document.getElementById("theme-switcher");
+const themeButtons = document.querySelectorAll(".theme-btn");
+
+const applyTheme = (theme) => {
+  const dark =
+    theme === "dark" ||
+    (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.classList.toggle("dark", dark);
+  document.querySelectorAll(".theme-current").forEach((el) => {
+    el.hidden = el.dataset.theme !== (dark ? "dark" : "light");
+  });
+  themeButtons.forEach((btn) => {
+    const active = btn.dataset.theme === theme;
+    btn.classList.toggle("text-zinc-900", active);
+    btn.classList.toggle("dark:text-zinc-100", active);
+    btn.setAttribute("aria-pressed", active);
+  });
+};
+
+const setTheme = (theme) => {
+  localStorage.setItem(themeKey, theme);
+  applyTheme(theme);
+};
+
+themeButtons.forEach((btn) =>
+  btn.addEventListener("click", () => {
+    setTheme(btn.dataset.theme);
+    themeSwitcher.open = false;
+  })
+);
+
+document.addEventListener("click", (e) => {
+  if (!themeSwitcher.contains(e.target)) themeSwitcher.open = false;
+});
+
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if ((localStorage.getItem(themeKey) || "system") === "system") applyTheme("system");
+});
+
+setTheme(localStorage.getItem(themeKey) || "system");
+
+const sizes = [128, 96, 80, 64, 48, 32];
+const bgButtons = document.querySelectorAll(".bg-btn");
+let bg = "gradient";
+const render = () => {
+  const opts = { background: bg, hue: +hue.value, saturation: +sat.value, lightness: +light.value };
+  document.getElementById("hue-val").textContent = hue.value + "°";
+  document.getElementById("sat-val").textContent = (+sat.value).toFixed(2);
+  document.getElementById("light-val").textContent = (+light.value).toFixed(2);
+  document.getElementById("preview").innerHTML = sizes
+    .map((s) => `<figure class="shrink-0 text-center">
+      <div class="overflow-hidden shadow-sm ring-1 ring-zinc-200/70 dark:ring-zinc-700/70" style="border-radius:${Math.min(12, s / 8)}px">${identican(seed.value, { ...opts, size: s })}</div>
+      <figcaption class="mt-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">${s}px</figcaption>
+    </figure>`)
+    .join("");
+  document.querySelectorAll("[data-seed]").forEach((cell) => {
+    cell.innerHTML = identican(cell.dataset.seed, { ...opts, size: <%= it.gallerySize %> });
+  });
+};
+const setBg = (value) => {
+  bg = value;
+  bgButtons.forEach((btn) => {
+    const active = btn.dataset.bg === value;
+    btn.classList.toggle("bg-white", active);
+    btn.classList.toggle("text-zinc-900", active);
+    btn.classList.toggle("shadow-sm", active);
+    btn.classList.toggle("dark:bg-zinc-700", active);
+    btn.classList.toggle("dark:text-zinc-100", active);
+    btn.setAttribute("aria-pressed", active);
+  });
+  render();
+};
+bgButtons.forEach((btn) => btn.addEventListener("click", () => setBg(btn.dataset.bg)));
+document.getElementById("randomize").addEventListener("click", () => {
+  document.querySelectorAll("[data-seed]").forEach((cell) => {
+    cell.dataset.seed = Math.random().toString(36).slice(2);
+  });
+  render();
+});
+seed.addEventListener("input", render);
+hue.addEventListener("input", render);
+sat.addEventListener("input", render);
+light.addEventListener("input", render);
+setBg("gradient");
+</script>
+<% }) %>

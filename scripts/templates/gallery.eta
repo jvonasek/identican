@@ -1,0 +1,11 @@
+<section class="mt-12">
+  <div class="flex items-center justify-between gap-4">
+    <h2 class="text-2xl font-semibold tracking-tight">Gallery</h2>
+    <button type="button" id="randomize" class="shrink-0 rounded-lg border border-zinc-300 bg-zinc-200/60 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700">Randomize</button>
+  </div>
+  <main class="mt-8 grid grid-cols-3 gap-2 sm:grid-cols-6 lg:grid-cols-8 [&_svg]:block [&_svg]:size-full">
+  <% it.cells.forEach((cell) => { %>
+    <div class="aspect-square overflow-hidden rounded-xl" data-seed="<%= cell.seed %>"><%~ cell.svg %></div>
+  <% }) %>
+  </main>
+</section>
