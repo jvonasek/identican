@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>identican Benchmark</title>
+    <style>
+      body {
+        font-family: Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+      }
+      main {
+        text-align: center;
+      }
+      #result {
+        margin: 2rem;
+      }
+      svg {
+        width: 40px;
+        height: 40px;
+        display: inline-block;
+        margin: 5px;
+        border-radius: 5px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- module scripts are deferred; serve over http, e.g. `npx serve` -->
+    <script type="module">
+      import { identican } from "../dist/index.js"
+      import { benchmark, randomString } from "./benchmark.js"
+
+      const TEST_NB = 100
+      const RUN_NB = 10
+      const SEED_LENGTH = 15
+
+      const averageRunDuration = benchmark(
+        (seed) => document.body.insertAdjacentHTML("beforeend", identican(seed, { size: 40 })),
+        () => [randomString(SEED_LENGTH)],
+        (run) => document.body.insertAdjacentHTML("beforeend", `<p>Run ${run}</p>`),
+        TEST_NB,
+        RUN_NB,
+      )
+
+      document.querySelector("#result").innerHTML =
+        `<p>Time to display ${TEST_NB} identican SVGs for random seeds:</p>` +
+        `<p><strong>${Math.round(averageRunDuration)} milliseconds</strong> (${RUN_NB} runs average)</p>`
+    </script>
+
+    <main>
+      <h1>Identican Benchmark</h1>
+      <div id="result">Running benchmark, please wait...</div>
+    </main>
+  </body>
+</html>

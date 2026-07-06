@@ -14,7 +14,7 @@
     "type": "git",
     "url": "git+https://github.com/jvonasek/identican.git"
   },
-  "homepage": "https://github.com/jvonasek/identican#readme",
+  "homepage": "https://jvonasek.github.io/identican",
   "bugs": "https://github.com/jvonasek/identican/issues",
   "sideEffects": false,
   "type": "module",
@@ -33,6 +33,7 @@
     "build": "rm -rf dist && tsc --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --minify --outfile=dist/index.js",
     "test": "npm run build && node --test",
     "demo": "node scripts/demo.mjs",
+    "benchmark": "npm run build && node benchmark/node.js",
     "dev": "node --watch-path=./src --watch-path=./scripts/templates scripts/demo.mjs",
     "format": "prettier --write .",
     "prepublishOnly": "npm test"

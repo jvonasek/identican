@@ -10,7 +10,9 @@ Each can varies by:
 
 Zero dependencies.
 
-Example: https://jvonasek.github.io/identican
+## Live Demo
+
+Try it here: https://jvonasek.github.io/identican
 
 ## Install
 
@@ -41,7 +43,8 @@ img.src = identicanDataUri(seed)
 In React:
 
 ```tsx
-<div dangerouslySetInnerHTML={{ __html: identican(user.id, { size: 48 }) }} />
+const src = useMemo(() => identicanDataUri(user.id, { size: 48 }), [user.id])
+return <img src={src} alt={user.name} />
 ```
 
 ## API
@@ -67,7 +70,11 @@ Any string is a valid seed, including the empty string. Output is fully determin
 
 ## How it works
 
-The seed is hashed (FNV-1a 32-bit) into the state of a small seeded PRNG (mulberry32). A fixed sequence of draws picks the background hue, the complementary can hue, the pattern type, and the pattern's color and geometry. The can itself is hand-drawn line art (`soda-can.svg`); the library paints the seeded colors and pattern underneath it — the pattern clipped to the can's side and warped to follow the cylinder's curvature — then draws the black outline on top.
+The seed is hashed (FNV-1a 32-bit) into the state of a small seeded PRNG (mulberry32). A fixed sequence of draws picks the background hue, the complementary can hue, the pattern type, and the pattern's color and geometry.
+
+## Performance
+
+`identican()` (and `identicanDataUri()`) is pure — the same seed and options always produce identical output — so results are memoized in a bounded FIFO cache. Repeated calls with the same arguments return the cached string without recomputing.
 
 ## Development
 
