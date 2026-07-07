@@ -36,6 +36,8 @@ Split-complementary + triadic. A curated palette was considered and rejected: pr
 
 **Theme knobs**: the `hue` option (default 0) adds a fixed rotation to every emitted hue; `saturation` and `lightness` (defaults 1) are global multipliers on every emitted color, clamped to 0–100%. All three funnel through one helper at render time, so consumers can theme the overall look (grayscale, pastel, moody, rotated) without touching the seeded values or the draw order.
 
+**Custom palettes**: the `palette` option lets a caller supply per-layer color pools (`backgrounds`/`cans`/`patterns`); when a pool is present, that layer's color is a seeded pick from the pool instead of the derived HSL. Because these are opaque strings the library uses verbatim, custom-palette colors intentionally bypass the two structural guarantees above: the `saturation`/`lightness` knobs do not touch them, and the contrast-by-construction rule does not apply — contrast between arbitrary palette colors is the caller's responsibility, not the library's. The picks are drawn from the PRNG in a fixed order (backgrounds → cans → patterns) *after* every hue draw, and only when a pool exists, so a no-palette call draws nothing extra and every existing identicon stays byte-identical.
+
 ## Geometry (template-based)
 
 The can artwork is hand-drawn line art: `soda-can.svg` in the repo root (906×1524) is the single source of truth for the can's look. `scripts/extract-template.mjs` extracts its path into the generated `src/template.ts` (coords rounded to integers to shrink output) — rerun it after editing `soda-can.svg`, never edit `src/template.ts` by hand.

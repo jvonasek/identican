@@ -1,6 +1,16 @@
 import { TEMPLATE_D } from "./template.js"
 import { lum } from "./color.js"
 
+/** Custom color pools. When an array is set, its layer's color is picked from
+ * the array (seeded) instead of being derived from the seed's hue. Colors are
+ * used verbatim — the `saturation`/`lightness` knobs and the built-in
+ * background/can/pattern contrast guarantees do not apply to them. */
+export interface IdenticanPalette {
+  backgrounds?: string[]
+  cans?: string[]
+  patterns?: string[]
+}
+
 export interface IdenticanOptions {
   /** Width/height attributes in px. The SVG has a viewBox, so it scales regardless. Default 128. */
   size?: number
@@ -14,6 +24,9 @@ export interface IdenticanOptions {
   lightness?: number
   /** Zoom the viewBox: 1 (default) fills the frame, >1 zooms in, <1 zooms out. The vertical pan tracks the zoom automatically. */
   zoom?: number
+  /** Custom color pools per layer; see {@link IdenticanPalette}. Layers with no
+   * array keep their seeded color. */
+  palette?: IdenticanPalette
 }
 
 // FNV-1a 32-bit
@@ -418,15 +431,28 @@ export function identican(seed: string, options: IdenticanOptions = {}): string 
     saturation = 1,
     lightness = 1,
     zoom = 1,
+    palette,
   } = options
-  const key = [seed, size, background, saturation, lightness, title, zoom].join(" ")
+  // Effective palette pools: an absent or empty array is no pool at all, so
+  // `palette: {}` / empty arrays behave exactly like omitting the option.
+  const bgPool = palette?.backgrounds?.length ? palette.backgrounds : undefined
+  const canPool = palette?.cans?.length ? palette.cans : undefined
+  const patPool = palette?.patterns?.length ? palette.patterns : undefined
+  // "" when no effective palette — the cache key and def-id strings must stay
+  // character-identical to the pre-palette format or every existing
+  // identicon's bytes change (the golden-hash test guards this).
+  const palKey =
+    bgPool || canPool || patPool
+      ? "|" + JSON.stringify([bgPool ?? 0, canPool ?? 0, patPool ?? 0])
+      : ""
+  const key = [seed, size, background, saturation, lightness, title, zoom].join(" ") + palKey
   const hit = cache.get(key)
   if (hit !== undefined) return hit
   const sizeN = Number(size)
   const sizeAttr = Number.isFinite(sizeN) ? sizeN : 128
   const hash = fnv1a(seed)
   const rand = mulberry32(hash)
-  const id = `ci${hash.toString(36)}-${fnv1a(`${background}|${saturation}|${lightness}|${zoom}`).toString(36)}`
+  const id = `ci${hash.toString(36)}-${fnv1a(`${background}|${saturation}|${lightness}|${zoom}${palKey}`).toString(36)}`
   const viewBox = getZoomViewBox(zoom)
 
   // every color funnels through this, so the two knobs shift the whole
@@ -456,6 +482,19 @@ export function identican(seed: string, options: IdenticanOptions = {}): string 
   const patternHue = canHue + (rand() < 0.5 ? 120 : -120)
   const patternSat = 55 + rand() * 25
   const patternL = 50 + rand() * 10
+
+  // Custom palette: when a layer's pool exists, pick a color from it (seeded)
+  // to override that layer's seeded color. Draws happen in a fixed order —
+  // backgrounds, cans, patterns — AFTER every hue draw above, and only when
+  // the pool exists, so a no-palette call draws nothing here and its output
+  // is unchanged (see the golden-hash test). Colors are escaped and used
+  // verbatim: the saturation/lightness knobs and the contrast guard do not
+  // touch them.
+  const pick = (arr: string[]): string => esc(String(arr[Math.floor(rand() * arr.length)]))
+  const bgPick = bgPool && pick(bgPool)
+  const canPick = canPool && pick(canPool)
+  const patPick = patPool && pick(patPool)
+
   const ps = Math.min(100, Math.max(0, patternSat * saturation))
   let pl = Math.min(100, Math.max(0, patternL * lightness))
   const cs = Math.min(100, Math.max(0, 60 * saturation))
@@ -471,12 +510,12 @@ export function identican(seed: string, options: IdenticanOptions = {}): string 
   // separates better than dropping down — hence the single-direction bump.
   const lift = 35 * Math.min(1, lightness) * Math.max(0, 1 - saturation / 0.6)
   if (lift > 0 && sep(pl) < 0.15) pl = Math.min(100, pl + lift)
-  const patternColor = hsl(patternHue, ps, pl)
+  const patternColor = patPick ?? hsl(patternHue, ps, pl)
 
   // bgA doubles as the solid background, so solid and gradient stay consistent
-  const bgA = col(baseHue, 72, 74)
-  const bgB = col(baseHue + 25, 80, 55)
-  const canColor = col(canHue, 60, 52)
+  const bgA = bgPick ?? col(baseHue, 72, 74)
+  const bgB = bgPick ?? col(baseHue + 25, 80, 55)
+  const canColor = canPick ?? col(canHue, 60, 52)
 
   const bgFill = background === "gradient" ? `url(#${id}-bg)` : bgA
   const svg =
@@ -527,7 +566,7 @@ export function identicanDataUri(seed: string, options: IdenticanOptions = {}): 
 /** Theme options fixed for the lifetime of an {@link Identican} instance. */
 export type IdenticanTheme = Pick<
   IdenticanOptions,
-  "background" | "saturation" | "lightness" | "zoom"
+  "background" | "saturation" | "lightness" | "zoom" | "palette"
 >
 
 /** Per-generation options, passed on each call to an {@link Identican} instance. */

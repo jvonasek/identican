@@ -164,6 +164,74 @@ test("zoom scales the viewBox with an auto vertical pan", () => {
   assert.notEqual(identican("hello", { zoom: 1.4 }), identican("hello"))
 })
 
+test("palette overrides the seeded colors verbatim", () => {
+  const svg = identican("hello", {
+    palette: { backgrounds: ["#0a0a0a"], cans: ["#e11d48"], patterns: ["#22d3ee"] },
+  })
+  // gradient background → the pick lands on BOTH gradient stops (flat fill)
+  assert.equal([...svg.matchAll(/stop-color="#0a0a0a"/g)].length, 2)
+  // solid background → the pick is the rect fill
+  const solid = identican("hello", {
+    background: "solid",
+    palette: { backgrounds: ["#0a0a0a"] },
+  })
+  assert.ok(solid.includes('fill="#0a0a0a"'))
+  assert.ok(svg.includes('fill="#e11d48"')) // can silhouette
+  // NOTE: patterns render via fill= OR stroke= depending on the seed's
+  // patternType (stripes/waves/spiral are strokes) — match either, so this
+  // test doesn't silently depend on what pattern "hello" happens to get
+  assert.match(svg, /(fill|stroke)="#22d3ee"/)
+})
+
+test("palette leaves un-specified layers seeded", () => {
+  // only cans provided → background/pattern still seeded hsl()
+  const svg = identican("hello", { palette: { cans: ["#e11d48"] } })
+  assert.ok(svg.includes('fill="#e11d48"'))
+  assert.ok(svg.includes("hsl(")) // seeded layers remain
+})
+
+test("empty palette array is treated as not provided", () => {
+  // must be byte-identical to no palette at all (no extra PRNG draw)
+  assert.equal(
+    identican("hello", { palette: { backgrounds: [] } }),
+    identican("hello"),
+  )
+})
+
+test("no palette matches omitting the option entirely (draw order preserved)", () => {
+  assert.equal(identican("hello", { palette: {} }), identican("hello"))
+  assert.equal(identican("hello", { palette: undefined }), identican("hello"))
+})
+
+test("palette color strings cannot inject markup", () => {
+  const svg = identican("hello", {
+    palette: { cans: ['"><script>alert(1)</script>'] },
+  })
+  assert.ok(!svg.includes("<script"))
+})
+
+test("palette is part of the cache key and def id", () => {
+  const a = identican("hello", { palette: { cans: ["#e11d48"] } })
+  const b = identican("hello", { palette: { cans: ["#2563eb"] } })
+  assert.notEqual(a, b)
+  const idOf = (s: string) => s.match(/clip-path="url\(#([^)]+)-clip\)"/)![1]
+  assert.notEqual(idOf(a), idOf(b))
+})
+
+test("palette pick is deterministic across seeds", () => {
+  const opts = { palette: { cans: ["#111", "#222", "#333", "#444"] } }
+  assert.equal(identican("seed-x", opts), identican("seed-x", opts))
+})
+
+test("Identican theme carries the palette", () => {
+  // no `as const` here — it would make the arrays readonly, which doesn't
+  // satisfy `cans?: string[]`. (npm test doesn't typecheck test files — tsc
+  // only covers src/ — but the error would surface in any editor.)
+  const theme = { palette: { cans: ["#e11d48"] } }
+  const can = new Identican(theme)
+  assert.equal(can("hello").toSvg(), identican("hello", { ...theme }))
+})
+
 // Golden output-format guard. The PRNG draw order IS the output format
 // (CLAUDE.md): if this test fails, you have changed every existing identicon.
 // That is sometimes intended (a deliberate visual change) — then update the
@@ -188,6 +256,11 @@ const GOLDEN: [string, Parameters<typeof identican>[1], string][] = [
     "user@example.com",
     { size: 64 },
     "e1c621171ac093cb41c15cf5e1f8aa645881d5054f48b7ca522e53c81d4fb157",
+  ],
+  [
+    "user-3",
+    { palette: { backgrounds: ["#0a0a0a"], cans: ["#e11d48"], patterns: ["#22d3ee"] } },
+    "0449fe79292787d167ebd2a328b5dc93c3c4cf32016898dc73767efe50235b34",
   ],
 ]
 

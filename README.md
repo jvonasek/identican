@@ -78,8 +78,42 @@ Returns SVG markup as a string.
 | `saturation` | `number`                          | `1`          | Multiplier on every color's saturation. `0` = grayscale, `>1` more vivid.                        |
 | `lightness`  | `number`                          | `1`          | Multiplier on every color's lightness. `<1` darker/moodier, `>1` lighter/pastel.                 |
 | `zoom`       | `number`                          | `1`          | Adjust the can zoom in the viewbox. `>1` to zoom in, `<1` to zoom out.                           |
+| `palette`    | `IdenticanPalette`                | —            | Custom color pools per layer; see [Custom palette](#custom-palette). Layers with no array stay seeded. |
 
 Any string is a valid seed, including the empty string. Output is fully deterministic — no `Math.random`, no time. Identical bytes across engines in practice; see `docs/DESIGN.md` for the one theoretical caveat (trig rounding).
+
+### Custom palette
+
+Supply your own colors per layer with the `palette` option. Each field is a
+pool of color strings; for a layer with a pool, one color is picked
+deterministically from the seed instead of deriving it from the seed's hue.
+Layers you omit keep their normal seeded color.
+
+```ts
+identican("user@example.com", {
+  palette: {
+    backgrounds: ["#fff", "hsl(210 40% 96%)"],
+    cans: ["#e11d48", "#2563eb"],
+    // patterns omitted → pattern color stays seeded
+  },
+})
+```
+
+```ts
+interface IdenticanPalette {
+  backgrounds?: string[]
+  cans?: string[]
+  patterns?: string[]
+}
+```
+
+Two things to know: palette colors are used **verbatim**, so the
+`saturation`/`lightness` knobs do not apply to them (they still apply to any
+seeded layer). And the built-in background/can/pattern contrast guarantee does
+not apply to palette colors — with a custom palette, keeping colors legible
+against each other is your responsibility. An absent field or an empty array
+means "no pool", i.e. that layer stays seeded, exactly as if `palette` were
+omitted.
 
 ### `identicanDataUri(seed: string, options?): string`
 
@@ -88,8 +122,8 @@ Any string is a valid seed, including the empty string. Output is fully determin
 ### `new Identican(theme?)`
 
 Callable instance with the theme fixed at construction. `theme` accepts
-`background`, `saturation`, `lightness`, `zoom` (same meaning as the `identican()`
-options above). Call the instance as `can(seed, { size?, title? })`; it returns
+`background`, `saturation`, `lightness`, `zoom`, `palette` (same meaning as the
+`identican()` options above). Call the instance as `can(seed, { size?, title? })`; it returns
 `{ toSvg(): string; toDataURL(): string }`.
 
 ## How it works
