@@ -70,7 +70,7 @@ Any string is a valid seed, including the empty string. Output is fully determin
 
 ## How it works
 
-The seed is hashed (FNV-1a 32-bit) into the state of a small seeded PRNG (mulberry32). A fixed sequence of draws picks the background hue, the complementary can hue, the pattern type, and the pattern's color and geometry.
+The seed is hashed (FNV-1a 32-bit) into the state of a small seeded PRNG (mulberry32). A fixed sequence of draws picks the background hue, the contrasting can hue, the pattern type, and the pattern's color and geometry.
 
 ## Performance
 

@@ -60,6 +60,30 @@ test("saturation/lightness options scale every color", () => {
   assert.notEqual(identican("hello"), identican("hello", { lightness: 1.3 }))
 })
 
+test("base hue is quantized to a multiple of 18", () => {
+  for (const seed of ["a", "hello", "world", "1", "identican", "xyz", "seed-42"]) {
+    const svg = identican(seed)
+    const m = svg.match(/hsl\((\d+) 72% 74%\)/) // bgA signature
+    assert.ok(m, `no background color found for seed "${seed}"`)
+    assert.equal(Number(m[1]) % 18, 0, `base hue not on the 20-hue wheel for "${seed}"`)
+  }
+})
+
+test("can hue is a seeded soft-split complement of the base", () => {
+  const allowed = new Set([150, 165, 195, 210])
+  const seen = new Set()
+  for (let i = 0; i < 50; i++) {
+    const svg = identican("offset-seed-" + i)
+    const b = svg.match(/hsl\((\d+) 72% 74%\)/) // bgA → baseHue
+    const c = svg.match(/hsl\((\d+) 60% 52%\)/) // canColor → canHue
+    assert.ok(b && c, `missing bg/can color for seed ${i}`)
+    const offset = (((Number(c[1]) - Number(b[1])) % 360) + 360) % 360
+    assert.ok(allowed.has(offset), `offset ${offset} not in [150,165,195,210] (seed ${i})`)
+    seen.add(offset)
+  }
+  assert.ok(seen.size >= 2, `expected multiple offsets across 50 seeds, saw ${[...seen]}`)
+})
+
 test("hue option rotates every color", () => {
   assert.equal(identican("hello"), identican("hello", { hue: 0 }))
   assert.equal(identican("hello"), identican("hello", { hue: 360 }))
@@ -148,23 +172,23 @@ test("aria: hidden by default, labelled via title, label escaped", () => {
 // If you did NOT intend a visual change, your change reordered/added/removed
 // a rand() draw or altered emitted markup: fix that instead.
 const GOLDEN: [string, Parameters<typeof identican>[1], string][] = [
-  ["hello", {}, "af4275d53897437197a991e9a3b2220b96a9e9dfdabc2fe06860849230869f81"],
-  ["", {}, "478cb8fa6eb232e74af6136771c03e4bbe8fac6b213050af25940395b81aa4a8"],
-  ["user-0", {}, "f0bfc022f276025080c9efc55a4de648db68f853a91c5290473a348e327ecd44"],
+  ["hello", {}, "96174a179d616235df662e4855f3f3d257cbc339ec5d31fb4ad6222bba505ac1"],
+  ["", {}, "624b03e4ebf86e4a8526f2630356ccf112c1674435636fa465be9095d34bff41"],
+  ["user-0", {}, "ff7566d84c086264446ce2e63ea1a531fd18e01962e2bc766e16489e42b2719a"],
   [
     "user-1",
     { background: "solid" },
-    "d0b05ae9c4127f8ac6aa86dc420fe092757a9c5dc4e0dfe0278c9e80c896f13e",
+    "afa2ce687e10e9a6cd7fb18a53afe902234cf7973fb25acd79b88a507b323978",
   ],
   [
     "user-2",
     { background: "none", hue: 90, saturation: 0.5, lightness: 1.3 },
-    "a87da916ccab1cf6955a952b28b3b87d03aa4facf63ba988921a0e7d3d1955a5",
+    "b16133bea229fb7b291adc5f1e05a6fb375e14244b435481ac8e570a8935b2bc",
   ],
   [
     "user@example.com",
     { size: 64 },
-    "9ed37d8d96882d1234cd6bfe854e84dc9487142bacb29f51a8397da3ebb879e8",
+    "29827904865e471656edd90185c98016e0ae44bf7aa0db5730f6ef5c246cb40d",
   ],
 ]
 

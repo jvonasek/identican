@@ -15,5 +15,5 @@ Zero-dependency TypeScript library: `identican(seed, { size? })` deterministical
 
 - **Determinism**: same seed → byte-identical SVG, on every platform. All randomness comes from the seeded mulberry32 PRNG in `src/index.ts` — never `Math.random`.
 - **Draw order is the format**: parameters are drawn from the PRNG in a fixed order. Reordering, adding, or removing a draw changes every existing identicon — treat that as a breaking change, don't do it casually.
-- **Contrast by construction**: background and can are complementary (hues 180° apart); the pattern uses one of the can hue's triadic colors (±120°). The can must never blend into the background — keep that property when touching colors.
+- **Contrast by construction**: background and can strongly contrast (the can is a seeded soft-split complement, 150–210° off the background — always ≥150°, so it can never blend in); the pattern uses one of the can hue's triadic colors (±120°). The can must never blend into the background — keep that property when touching colors.
 - No runtime dependencies. Keep it that way.

@@ -431,11 +431,18 @@ export function identican(seed: string, options: IdenticanOptions = {}): string 
     )
 
   // fixed draw order — see note on mulberry32
-  // Complementary scheme: background → baseHue, can → baseHue + 180;
-  // the pattern takes one of the can color's triadic hues (±120°, seeded).
-  const baseHue = rand() * 360
+  // Complementary scheme: background → baseHue; can → a seeded soft-split
+  // complement of the background (150/165/195/210° off — always ≥150°, so the
+  // can never blends into the background); the pattern takes one of the can
+  // color's triadic hues (±120°, seeded).
+  // 20 discrete background hues, 18° apart (360/20) — a clean but varied wheel.
+  // The can offset and the ±120° triad are not multiples of 18, so the can and
+  // pattern hues sit off the background wheel; that's deliberate — it adds
+  // variety while the large background area stays on the clean grid.
+  const baseHue = Math.floor(rand() * 20) * 18
+  const canOffset = [150, 165, 195, 210][Math.floor(rand() * 4)]
   const patternType = Math.floor(rand() * 16)
-  const canHue = baseHue + 180
+  const canHue = baseHue + canOffset
   const patternHue = canHue + (rand() < 0.5 ? 120 : -120)
   const patternSat = 55 + rand() * 25
   const patternL = 50 + rand() * 10
