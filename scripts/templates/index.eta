@@ -53,18 +53,19 @@ const sizes = [128, 96, 80, 64, 48, 32];
 const bgButtons = document.querySelectorAll(".bg-btn");
 let bg = "gradient";
 const render = () => {
-  const opts = { background: bg, hue: +hue.value, saturation: +sat.value, lightness: +light.value };
-  document.getElementById("hue-val").textContent = hue.value + "°";
+  // theme fixed for this render pass; size passed per call
+  const can = new Identican({ background: bg, saturation: +sat.value, lightness: +light.value, zoom: +zoom.value });
   document.getElementById("sat-val").textContent = (+sat.value).toFixed(2);
   document.getElementById("light-val").textContent = (+light.value).toFixed(2);
+  document.getElementById("zoom-val").textContent = (+zoom.value).toFixed(2);
   document.getElementById("preview").innerHTML = sizes
     .map((s) => `<figure class="shrink-0 text-center">
-      <div class="overflow-hidden shadow-sm ring-1 ring-zinc-200/70 dark:ring-zinc-700/70" style="border-radius:${Math.min(12, s / 8)}px">${identican(seed.value, { ...opts, size: s })}</div>
+      <div class="overflow-hidden shadow-sm ring-1 ring-zinc-200/70 dark:ring-zinc-700/70" style="border-radius:${Math.min(12, s / 8)}px">${can(seed.value, { size: s }).toSvg()}</div>
       <figcaption class="mt-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">${s}px</figcaption>
     </figure>`)
     .join("");
   document.querySelectorAll("[data-seed]").forEach((cell) => {
-    cell.innerHTML = identican(cell.dataset.seed, { ...opts, size: <%= it.gallerySize %> });
+    cell.innerHTML = can(cell.dataset.seed, { size: <%= it.gallerySize %> }).toSvg();
   });
 };
 const setBg = (value) => {
@@ -88,9 +89,9 @@ document.getElementById("randomize").addEventListener("click", () => {
   render();
 });
 seed.addEventListener("input", render);
-hue.addEventListener("input", render);
 sat.addEventListener("input", render);
 light.addEventListener("input", render);
+zoom.addEventListener("input", render);
 setBg("gradient");
 </script>
 <% }) %>

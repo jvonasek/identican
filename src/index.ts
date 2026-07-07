@@ -8,12 +8,12 @@ export interface IdenticanOptions {
   background?: "gradient" | "solid" | "none"
   /** Accessible name announced by screen readers. When omitted the SVG is aria-hidden (decorative). */
   title?: string
-  /** Degrees added to every color's hue, rotating the whole palette around the wheel. Default 0. */
-  hue?: number
   /** Multiplier on every color's saturation. 1 (default) = normal, 0 = grayscale, >1 more vivid. */
   saturation?: number
   /** Multiplier on every color's lightness. 1 (default) = normal, <1 darker/moodier, >1 lighter/pastel. */
   lightness?: number
+  /** Zoom the viewBox: 1 (default) fills the frame, >1 zooms in, <1 zooms out. The vertical pan tracks the zoom automatically. */
+  zoom?: number
 }
 
 // FNV-1a 32-bit
@@ -46,6 +46,17 @@ const esc = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
 
 const n = (v: number): number => Math.round(v * 10) / 10
+
+const getZoomViewBox = (zoom: number): { x: number; y: number; size: number } => {
+  const size = 1524 / zoom
+  // zooming in pans up to keep the can framed (1 → 0%, 1.4 → -15%); zooming out stays centered. x is always centered.
+  const yOffset = zoom > 1 ? -37.5 * (zoom - 1) : 0
+  return {
+    x: (0.5 - 0.5 / zoom) * 1524,
+    y: (0.5 - 0.5 / zoom + yOffset / 100) * 1524,
+    size,
+  }
+}
 
 // All geometry is in the template's coordinate space (soda-can.svg, 906×1524),
 // centered in a 1524×1524 square viewBox via translate(309 0).
@@ -404,26 +415,25 @@ export function identican(seed: string, options: IdenticanOptions = {}): string 
     size = 128,
     background = "gradient",
     title,
-    hue = 0,
     saturation = 1,
     lightness = 1,
+    zoom = 1,
   } = options
-  const key = [seed, size, background, hue, saturation, lightness, title].join(" ")
+  const key = [seed, size, background, saturation, lightness, title, zoom].join(" ")
   const hit = cache.get(key)
   if (hit !== undefined) return hit
   const sizeN = Number(size)
   const sizeAttr = Number.isFinite(sizeN) ? sizeN : 128
   const hash = fnv1a(seed)
   const rand = mulberry32(hash)
-  // normalize hue mod 360 to match hsl()'s wraparound, so e.g. hue: 360 hashes the same as hue: 0
-  const hueNorm = ((hue % 360) + 360) % 360
-  const id = `ci${hash.toString(36)}-${fnv1a(`${background}|${hueNorm}|${saturation}|${lightness}`).toString(36)}`
+  const id = `ci${hash.toString(36)}-${fnv1a(`${background}|${saturation}|${lightness}|${zoom}`).toString(36)}`
+  const viewBox = getZoomViewBox(zoom)
 
-  // every color funnels through this, so the three knobs shift the whole
+  // every color funnels through this, so the two knobs shift the whole
   // palette together; render-time only, no PRNG draws involved
   const col = (h: number, s: number, l: number): string =>
     hsl(
-      h + hue,
+      h,
       Math.min(100, Math.max(0, s * saturation)),
       // cap below 100 so a high lightness knob never washes a color to pure
       // white — keep at least a sliver of the hue
@@ -450,8 +460,8 @@ export function identican(seed: string, options: IdenticanOptions = {}): string 
   let pl = Math.min(100, Math.max(0, patternL * lightness))
   const cs = Math.min(100, Math.max(0, 60 * saturation))
   const cl = Math.min(100, Math.max(0, 52 * lightness))
-  const canL = lum(canHue + hue, cs, cl)
-  const sep = (l: number): number => lum(patternHue + hue, ps, l) - canL
+  const canL = lum(canHue, cs, cl)
+  const sep = (l: number): number => lum(patternHue, ps, l) - canL
   // At full saturation the pattern's hue (120° off the can) separates it on its
   // own, so the brightness lift is only needed as saturation drops toward
   // grayscale, where hue vanishes and only lightness tells pattern from can.
@@ -461,7 +471,7 @@ export function identican(seed: string, options: IdenticanOptions = {}): string 
   // separates better than dropping down — hence the single-direction bump.
   const lift = 35 * Math.min(1, lightness) * Math.max(0, 1 - saturation / 0.6)
   if (lift > 0 && sep(pl) < 0.15) pl = Math.min(100, pl + lift)
-  const patternColor = hsl(patternHue + hue, ps, pl)
+  const patternColor = hsl(patternHue, ps, pl)
 
   // bgA doubles as the solid background, so solid and gradient stay consistent
   const bgA = col(baseHue, 72, 74)
@@ -470,7 +480,7 @@ export function identican(seed: string, options: IdenticanOptions = {}): string 
 
   const bgFill = background === "gradient" ? `url(#${id}-bg)` : bgA
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${sizeAttr}" height="${sizeAttr}" viewBox="0 0 1524 1524" role="img" ${
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${sizeAttr}" height="${sizeAttr}" viewBox="${n(viewBox.x)} ${n(viewBox.y)} ${n(viewBox.size)} ${n(viewBox.size)}" role="img" ${
       title ? `aria-label="${esc(String(title))}"` : `aria-hidden="true"`
     }>` +
     `<defs>` +
@@ -488,7 +498,9 @@ export function identican(seed: string, options: IdenticanOptions = {}): string 
     `</linearGradient>` +
     `<clipPath id="${id}-clip"><path d="${LABEL_D}"/></clipPath>` +
     `</defs>` +
-    (background === "none" ? "" : `<rect width="1524" height="1524" fill="${bgFill}"/>`) +
+    (background === "none"
+      ? ""
+      : `<rect x="${n(viewBox.x)}" y="${n(viewBox.y)}" width="${n(viewBox.size)}" height="${n(viewBox.size)}" fill="${bgFill}"/>`) +
     `<g transform="translate(${n(762 * (1 - CAN_SCALE))} ${n(762 * (1 - CAN_SCALE))}) scale(${CAN_SCALE}) translate(309 0)">` +
     `<path d="${SILHOUETTE_D}" fill="${canColor}"/>` +
     `<ellipse cx="458" cy="242" rx="267" ry="70" fill="${canColor}"/>` +
@@ -510,4 +522,58 @@ export function identican(seed: string, options: IdenticanOptions = {}): string 
 /** identican() output as a data: URI, ready to use as an <img> src. */
 export function identicanDataUri(seed: string, options: IdenticanOptions = {}): string {
   return "data:image/svg+xml;utf8," + encodeURIComponent(identican(seed, options))
+}
+
+/** Theme options fixed for the lifetime of an {@link Identican} instance. */
+export type IdenticanTheme = Pick<
+  IdenticanOptions,
+  "background" | "saturation" | "lightness" | "zoom"
+>
+
+/** Per-generation options, passed on each call to an {@link Identican} instance. */
+export type RenderOptions = Pick<IdenticanOptions, "size" | "title">
+
+/** A single generation. Render lazily to whichever format you need. */
+export interface IdenticanResult {
+  /** SVG markup string — same as `identican(seed, { ...theme, ...renderOptions })`. */
+  toSvg(): string
+  /** `data:image/svg+xml` URI — same as `identicanDataUri(seed, { ...theme, ...renderOptions })`. */
+  toDataURL(): string
+}
+
+// Callable-instance pattern: `new Identican(theme)` returns a function you call
+// as `can(seed, renderOptions)`. The interface below adds the call signature to
+// the `Identican` type (declaration merging with the class); the constructor
+// returns the closure in place of `this`, so the instance IS that function.
+export interface Identican {
+  (seed: string, options?: RenderOptions): IdenticanResult
+}
+
+/**
+ * Class API with the palette theme fixed at construction. The instance is
+ * callable: `new Identican(theme)(seed, renderOptions)`.
+ *
+ * ```ts
+ * const can = new Identican({ background: "solid", lightness: 0.5 })
+ * can("user@example.com", { size: 48 }).toSvg()
+ * can("user@example.com", { size: 48 }).toDataURL()
+ * ```
+ *
+ * Theme (`background`/`hue`/`saturation`/`lightness`) is set once here; render
+ * options (`size`/`title`) are passed per call. Output is identical to calling
+ * `identican(seed, { ...theme, ...renderOptions })` directly.
+ */
+export class Identican {
+  constructor(theme: IdenticanTheme = {}) {
+    const call = (seed: string, options: RenderOptions = {}): IdenticanResult => {
+      const merged: IdenticanOptions = { ...theme, ...options }
+      return {
+        toSvg: () => identican(seed, merged),
+        toDataURL: () => identicanDataUri(seed, merged),
+      }
+    }
+    // The constructor returns the closure, replacing the default `this`; the
+    // `interface Identican` above types the result as callable.
+    return call as unknown as Identican
+  }
 }

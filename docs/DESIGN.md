@@ -6,6 +6,12 @@ The settled design decisions behind `identican`, recorded so visual tuning doesn
 
 A pure function returning an SVG markup string. No framework coupling; works via `innerHTML`, `data:` URI, or `dangerouslySetInnerHTML`. A React wrapper was considered and skipped — the string covers it.
 
+A callable `Identican` class API is layered on top: it fixes the theme options
+(`background`/`hue`/`saturation`/`lightness`) at construction and forwards
+`identican(seed, { ...theme, ...renderOptions })` per call — pure sugar over the
+function, no rendering logic of its own, so determinism and the golden-format
+guard are unaffected.
+
 ## Determinism
 
 ```

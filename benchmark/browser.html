@@ -27,15 +27,16 @@
   <body>
     <!-- module scripts are deferred; serve over http, e.g. `npx serve` -->
     <script type="module">
-      import { identican } from "../dist/index.js"
+      import { Identican } from "../dist/index.js"
       import { benchmark, randomString } from "./benchmark.js"
 
       const TEST_NB = 100
       const RUN_NB = 10
       const SEED_LENGTH = 15
 
+      const can = new Identican()
       const averageRunDuration = benchmark(
-        (seed) => document.body.insertAdjacentHTML("beforeend", identican(seed, { size: 40 })),
+        (seed) => document.body.insertAdjacentHTML("beforeend", can(seed, { size: 40 }).toSvg()),
         () => [randomString(SEED_LENGTH)],
         (run) => document.body.insertAdjacentHTML("beforeend", `<p>Run ${run}</p>`),
         TEST_NB,

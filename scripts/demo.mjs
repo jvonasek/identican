@@ -20,14 +20,15 @@ const { outputFiles } = await build({
 const code = outputFiles[0].text
 const tmp = join(mkdtempSync(join(tmpdir(), "identican-")), "lib.mjs")
 writeFileSync(tmp, code)
-const { identican } = await import(tmp)
+const { Identican } = await import(tmp)
 const lib = code.replace(/export\s*\{[^}]*\};?\s*$/, "")
 
 const GALLERY_SIZE = 128
 
+const can = new Identican()
 const cells = Array.from({ length: 64 }, (_, i) => ({
   seed: `can-${i + 1}`,
-  svg: identican(`a${i + 1}`, { size: GALLERY_SIZE }),
+  svg: can(`a${i + 1}`, { size: GALLERY_SIZE }).toSvg(),
 }))
 
 const eta = new Eta({ views: fileURLToPath(new URL("./templates", import.meta.url)) })

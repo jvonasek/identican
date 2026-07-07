@@ -1,12 +1,13 @@
-import { identican } from "../dist/index.js"
+import { Identican } from "../dist/index.js"
 import { benchmark, randomString } from "./benchmark.js"
 
 const TEST_NB = 10_000
 const RUN_NB = 10
 const SEED_LENGTH = 15
 
+const can = new Identican()
 const averageRunDuration = benchmark(
-  (seed) => identican(seed),
+  (seed) => can(seed).toSvg(),
   () => [randomString(SEED_LENGTH)],
   (run) => console.log(`Run ${run} of ${RUN_NB}…`),
   TEST_NB,

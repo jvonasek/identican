@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { createHash } from "node:crypto"
-import { identican, identicanDataUri } from "../dist/index.js"
+import { identican, identicanDataUri, Identican } from "../dist/index.js"
 import { lum } from "../src/color.ts"
 
 test("same seed produces identical output", () => {
@@ -9,7 +9,7 @@ test("same seed produces identical output", () => {
 })
 
 test("memoized result matches a fresh computation for the same options", () => {
-  const opts = { size: 64, hue: 90, saturation: 0.8 }
+  const opts = { size: 64, saturation: 0.8 }
   const first = identican("cachecheck", opts) // populates cache
   const second = identican("cachecheck", opts) // cache hit
   assert.equal(first, second)
@@ -84,19 +84,6 @@ test("can hue is a seeded soft-split complement of the base", () => {
   assert.ok(seen.size >= 2, `expected multiple offsets across 50 seeds, saw ${[...seen]}`)
 })
 
-test("hue option rotates every color", () => {
-  assert.equal(identican("hello"), identican("hello", { hue: 0 }))
-  assert.equal(identican("hello"), identican("hello", { hue: 360 }))
-  assert.notEqual(identican("hello"), identican("hello", { hue: 90 }))
-  // rotation preserves saturation/lightness for bg/can — only hues move
-  // (the pattern color may shift: its legibility guard re-runs on rotated hues)
-  const sl = (svg: string) => [...svg.matchAll(/hsl\(\d+ (\d+% \d+%)\)/g)].map((m) => m[1])
-  assert.deepEqual(
-    sl(identican("hello", { hue: 90 })).slice(0, 3),
-    sl(identican("hello")).slice(0, 3),
-  )
-})
-
 test("pattern stays lighter than the can on a dark grayscale palette", () => {
   // gray + dark is the worst case: hue can't separate pattern from can,
   // so the brightness guard must fire and lift the pattern on every seed
@@ -113,7 +100,7 @@ test("background option: gradient (default), solid, none", () => {
   assert.ok(identican("hello").includes('fill="url(#'))
   assert.ok(
     identican("hello", { background: "solid" }).includes(
-      '<rect width="1524" height="1524" fill="hsl(',
+      '<rect x="0" y="0" width="1524" height="1524" fill="hsl(',
     ),
   )
   assert.ok(!identican("hello", { background: "none" }).includes("<rect"))
@@ -122,7 +109,7 @@ test("background option: gradient (default), solid, none", () => {
 test("def ids differ when theme options differ, so same-seed defs cannot collide", () => {
   const idOf = (svg: string) => svg.match(/clip-path="url\(#([^)]+)-clip\)"/)![1]
   assert.equal(idOf(identican("hello")), idOf(identican("hello")))
-  assert.notEqual(idOf(identican("hello")), idOf(identican("hello", { hue: 90 })))
+  assert.notEqual(idOf(identican("hello")), idOf(identican("hello", { lightness: 0.5 })))
   assert.notEqual(idOf(identican("hello")), idOf(identican("hello", { background: "solid" })))
 })
 
@@ -165,6 +152,18 @@ test("aria: hidden by default, labelled via title, label escaped", () => {
   assert.ok(hostile.includes("&quot;&gt;&lt;script&gt;"))
 })
 
+test("zoom scales the viewBox with an auto vertical pan", () => {
+  // no zoom → full frame
+  assert.ok(identican("hello").includes('viewBox="0 0 1524 1524"'))
+  // zoom 1.4 → size 1524/1.4 ≈ 1088.6, y pan -15%: x=(0.5-0.5/1.4)*1524≈217.7,
+  // y=(0.5-0.5/1.4-0.15)*1524≈-10.9
+  assert.ok(identican("hello", { zoom: 1.4 }).includes('viewBox="217.7 -10.9 1088.6 1088.6"'))
+  // zoom <1 zooms out (larger viewBox), can stays centered (no y pan)
+  assert.ok(identican("hello", { zoom: 0.5 }).includes('viewBox="-762 -762 3048 3048"'))
+  // zoom is part of the cache key / id — different zoom, different output
+  assert.notEqual(identican("hello", { zoom: 1.4 }), identican("hello"))
+})
+
 // Golden output-format guard. The PRNG draw order IS the output format
 // (CLAUDE.md): if this test fails, you have changed every existing identicon.
 // That is sometimes intended (a deliberate visual change) — then update the
@@ -172,23 +171,23 @@ test("aria: hidden by default, labelled via title, label escaped", () => {
 // If you did NOT intend a visual change, your change reordered/added/removed
 // a rand() draw or altered emitted markup: fix that instead.
 const GOLDEN: [string, Parameters<typeof identican>[1], string][] = [
-  ["hello", {}, "96174a179d616235df662e4855f3f3d257cbc339ec5d31fb4ad6222bba505ac1"],
-  ["", {}, "624b03e4ebf86e4a8526f2630356ccf112c1674435636fa465be9095d34bff41"],
-  ["user-0", {}, "ff7566d84c086264446ce2e63ea1a531fd18e01962e2bc766e16489e42b2719a"],
+  ["hello", {}, "fef888bd0d006d789441ab0c8e90f8b8fb11a6942d8939d803fdcc296f728031"],
+  ["", {}, "8f0cb1f2378abbf67521290962034bf77c42314228b72527a49d8974082157dd"],
+  ["user-0", {}, "ba9afb1d0e120b0a733bc2ea53dd35e1299b98ec228cf22e509da51d1ab60168"],
   [
     "user-1",
     { background: "solid" },
-    "afa2ce687e10e9a6cd7fb18a53afe902234cf7973fb25acd79b88a507b323978",
+    "9508759477f516da896ccf80b96769fde54d5246159abd02898c4f618954ae4e",
   ],
   [
     "user-2",
-    { background: "none", hue: 90, saturation: 0.5, lightness: 1.3 },
-    "b16133bea229fb7b291adc5f1e05a6fb375e14244b435481ac8e570a8935b2bc",
+    { background: "none", saturation: 0.5, lightness: 1.3 },
+    "e1a21a9cfd7787327bddb39e8cc199d869f221894d0edef8b1c54dcbb5a038cf",
   ],
   [
     "user@example.com",
     { size: 64 },
-    "29827904865e471656edd90185c98016e0ae44bf7aa0db5730f6ef5c246cb40d",
+    "e1c621171ac093cb41c15cf5e1f8aa645881d5054f48b7ca522e53c81d4fb157",
   ],
 ]
 
@@ -201,4 +200,46 @@ test("output format is frozen (golden hashes)", () => {
       `format changed for ${JSON.stringify([seed, opts])}; actual ${actual}`,
     )
   }
+})
+
+test("Identican instance is callable and returns toSvg/toDataURL", () => {
+  const can = new Identican({ background: "solid" })
+  const result = can("randomseed", { size: 48 })
+  assert.equal(typeof result.toSvg, "function")
+  assert.equal(typeof result.toDataURL, "function")
+  assert.ok(result.toSvg().startsWith("<svg"))
+  assert.ok(result.toDataURL().startsWith("data:image/svg+xml;utf8,"))
+})
+
+test("Identican forwards theme + render options to identican()", () => {
+  const theme = { background: "solid", lightness: 0.5, saturation: 0.5 } as const
+  const can = new Identican(theme)
+  assert.equal(
+    can("randomseed", { size: 48 }).toSvg(),
+    identican("randomseed", { ...theme, size: 48 }),
+  )
+  assert.equal(
+    can("randomseed", { size: 48 }).toDataURL(),
+    identicanDataUri("randomseed", { ...theme, size: 48 }),
+  )
+})
+
+test("Identican with no theme matches the plain function", () => {
+  const can = new Identican()
+  assert.equal(can("hello").toSvg(), identican("hello"))
+  assert.equal(can("hello", { size: 64 }).toSvg(), identican("hello", { size: 64 }))
+})
+
+test("Identican theme is applied (solid background produces a rect fill)", () => {
+  const svg = new Identican({ background: "solid" })("hello").toSvg()
+  assert.ok(svg.includes('<rect x="0" y="0" width="1524" height="1524" fill="hsl('))
+  assert.ok(!new Identican({ background: "none" })("hello").toSvg().includes("<rect"))
+})
+
+test("Identican render options override per call, theme stays fixed", () => {
+  const can = new Identican({ lightness: 0.5 })
+  assert.ok(can("hello", { size: 48 }).toSvg().includes('width="48" height="48"'))
+  assert.ok(can("hello", { size: 32 }).toSvg().includes('width="32" height="32"'))
+  // theme (lightness: 0.5) is applied on every call
+  assert.equal(can("hello").toSvg(), identican("hello", { lightness: 0.5 }))
 })
