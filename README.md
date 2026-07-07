@@ -1,6 +1,6 @@
 # Identican
 
-Deterministic soda-can identicons. Give it any string, get back a unique soda can as an SVG.
+Deterministic Soda-Can SVG Identicons. Give it any string, get back a unique soda can.
 
 Each can varies by:
 
