@@ -168,8 +168,9 @@ test("palette overrides the seeded colors verbatim", () => {
   const svg = identican("hello", {
     palette: { backgrounds: ["#0a0a0a"], cans: ["#e11d48"], patterns: ["#22d3ee"] },
   })
-  // gradient background → the pick lands on BOTH gradient stops (flat fill)
-  assert.equal([...svg.matchAll(/stop-color="#0a0a0a"/g)].length, 2)
+  // gradient background → first stop is the pick; with only one bg color the
+  // second stop falls back to the seeded default so the two stops always differ
+  assert.equal([...svg.matchAll(/stop-color="#0a0a0a"/g)].length, 1)
   // solid background → the pick is the rect fill
   const solid = identican("hello", {
     background: "solid",
@@ -183,6 +184,39 @@ test("palette overrides the seeded colors verbatim", () => {
   assert.match(svg, /(fill|stroke)="#22d3ee"/)
 })
 
+test("gradient uses two different background colors from the pool", () => {
+  const svg = identican("hello", {
+    palette: { backgrounds: ["#0a0a0a", "#f0f0f0"] },
+  })
+  const stops = [...svg.matchAll(/stop-color="(#[0-9a-f]{6})"/gi)].map((m) => m[1])
+  assert.equal(stops.length, 2)
+  assert.notEqual(stops[0], stops[1]) // never a flat fill when the pool allows it
+})
+
+test("gradient orders the lighter background color on top", () => {
+  // whichever way the two stops are picked, the top (offset 0.3) must be the
+  // lighter one and the bottom (offset 1) the darker
+  for (const seed of ["a", "b", "c", "d", "e", "f"]) {
+    const svg = identican(seed, { palette: { backgrounds: ["#111111", "#eeeeee"] } })
+    const stops = [...svg.matchAll(/stop-color="(#[0-9a-f]{6})"/gi)].map((m) => m[1])
+    assert.deepEqual(stops, ["#eeeeee", "#111111"], `seed ${seed}`)
+  }
+})
+
+test("pattern is picked to contrast the can, not just verbatim", () => {
+  // one high-contrast + one near-invisible pattern color against the can:
+  // the low-contrast one must never be chosen while a better option exists
+  const bad = "#e11e48" // ~same luminance as the can
+  const good = "#22d3ee"
+  for (const seed of ["a", "b", "c", "d", "e", "f", "g", "h"]) {
+    const svg = identican(seed, {
+      palette: { cans: ["#e11d48"], patterns: [good, bad] },
+    })
+    assert.match(svg, new RegExp(`(fill|stroke)="${good}"`))
+    assert.ok(!svg.includes(`"${bad}"`))
+  }
+})
+
 test("palette leaves un-specified layers seeded", () => {
   // only cans provided → background/pattern still seeded hsl()
   const svg = identican("hello", { palette: { cans: ["#e11d48"] } })
@@ -192,10 +226,7 @@ test("palette leaves un-specified layers seeded", () => {
 
 test("empty palette array is treated as not provided", () => {
   // must be byte-identical to no palette at all (no extra PRNG draw)
-  assert.equal(
-    identican("hello", { palette: { backgrounds: [] } }),
-    identican("hello"),
-  )
+  assert.equal(identican("hello", { palette: { backgrounds: [] } }), identican("hello"))
 })
 
 test("no palette matches omitting the option entirely (draw order preserved)", () => {
@@ -250,17 +281,17 @@ const GOLDEN: [string, Parameters<typeof identican>[1], string][] = [
   [
     "user-2",
     { background: "none", saturation: 0.5, lightness: 1.3 },
-    "e1a21a9cfd7787327bddb39e8cc199d869f221894d0edef8b1c54dcbb5a038cf",
+    "b02a7388c5055ade46e91399ce7f2837cb312cb5650a8219a7e3aee6810cb94f",
   ],
   [
     "user@example.com",
     { size: 64 },
-    "e1c621171ac093cb41c15cf5e1f8aa645881d5054f48b7ca522e53c81d4fb157",
+    "0f0b44239dbe403b0e2c20a66636387ba102b751de54ff780e150d5a3e05ab27",
   ],
   [
     "user-3",
     { palette: { backgrounds: ["#0a0a0a"], cans: ["#e11d48"], patterns: ["#22d3ee"] } },
-    "0449fe79292787d167ebd2a328b5dc93c3c4cf32016898dc73767efe50235b34",
+    "bd7e1e3e67d6b9cb76aeacc3932c25906d742fd01f7f220a538854b0fd26ff6c",
   ],
 ]
 

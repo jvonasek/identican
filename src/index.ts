@@ -1,10 +1,14 @@
 import { TEMPLATE_D } from "./template.js"
-import { lum } from "./color.js"
+import { lum, contrastRatio, lighterFirst } from "./color.js"
 
 /** Custom color pools. When an array is set, its layer's color is picked from
- * the array (seeded) instead of being derived from the seed's hue. Colors are
- * used verbatim — the `saturation`/`lightness` knobs and the built-in
- * background/can/pattern contrast guarantees do not apply to them. */
+ * the array (seeded, from a per-layer RNG that never disturbs the can's
+ * geometry) instead of being derived from the seed's hue. Colors are used
+ * verbatim — the `saturation`/`lightness` knobs don't apply. The background
+ * gradient draws two *different* colors from `backgrounds` (falling back to a
+ * seeded stop when the pool has only one), and `patterns` is filtered to the
+ * colors that contrast the chosen can color (highest-contrast if none clear the
+ * bar), so the pattern stays visible. */
 export interface IdenticanPalette {
   backgrounds?: string[]
   cans?: string[]
@@ -89,15 +93,19 @@ const CX = L.x + RX
 const PATTERN_CURVE = 72
 const STRIPE_SIZE = 64 // horizontal stripe height
 const PIN_SIZE = 50 // pinstripe thickness
-const PIN_TOOTH = 50 // pinstripe saw tooth half-height
-const PIN_GAP = 64 // pinstripe horizontal distance between tooth peak and valley
+const PIN_TOOTH = 60 // pinstripe saw tooth half-height
+const PIN_GAP = 90 // pinstripe horizontal distance between tooth peak and valley
+const PIN_PHASE = -10 // horizontal phase of the sawtooth (template units)
 const DOT_SIZE = 100 // polkadot radius
 const WAVE_SIZE = 100 // wave stroke width
+const WAVE_Y_OFFSET = 70 // vertical shift of the wave rows
+const WAVE_PHASE = 0 // horizontal phase of the sine (radians)
 const BAND_SIZE = 182 // label band height
-const HATCH_SIZE = 82 // crosshatch line thickness
+const HATCH_SIZE = 40 // crosshatch line thickness
 const SPIRAL_SIZE = 92 // spiral stroke width
 const SPIRAL_GAP = 184 // spacing between spiral turns
 const SHAPE_SIZE = 256 // symbol half-width
+const SYMBOL_Y_OFFSET = 0 // vertical shift of the symbol grid rows
 const DIAG_SIZE = 100 // diagonal stripe thickness
 const BURST_RAYS = 8 // sunburst ray count
 const BURST_SIZE = 100 // sunburst overshoot past the label corners
@@ -111,6 +119,14 @@ const droop = (x: number): number => {
   const t = (x - CX) / RX
   return PATTERN_CURVE * Math.sqrt(Math.max(0, 1 - t * t))
 }
+
+// Map a cylinder-surface point to screen coords. a is the angle along the
+// visible front arc (0 = left rim, π/2 = center, π = right rim); v is height
+// on the flat label. Same parameterization as the polkadot/symbol grid.
+const onCylinder = (a: number, v: number): [number, number] => [
+  CX - RX * Math.cos(a),
+  v + PATTERN_CURVE * Math.sin(a),
+]
 
 // horizontal band with elliptical top/bottom edges — a ring around the cylinder
 function ring(y: number, h: number, fill: string): string {
@@ -153,6 +169,55 @@ const SHAPES = [
 
 type Rand = () => number
 
+// Custom-palette picking. Each layer draws from its own seeded RNG
+// (seed|role|colors) so palette choices never disturb the main draw sequence —
+// the can's geometry is identical whether or not a palette is set, and a
+// no-palette call touches none of this. Picked colors are used verbatim
+// (only HTML-escaped); the saturation/lightness knobs don't apply to them.
+const paletteRoleRand = (seed: string, role: string, colors?: string[]): Rand =>
+  mulberry32(fnv1a(`${seed}|${role}|${colors?.join(",") ?? ""}`))
+
+// pick any color from the pool; fall back to the seeded default when empty
+const pickColor = (colors: string[] | undefined, rand: Rand, fallback: string): string => {
+  const pool = colors?.filter(Boolean)
+  if (!pool?.length) return fallback
+  return esc(String(pool[Math.floor(rand() * pool.length)]))
+}
+
+// pick a color different from `compareTo` (so the two gradient stops differ)
+const pickDifferentColor = (
+  colors: string[] | undefined,
+  rand: Rand,
+  compareTo: string,
+  fallback: string,
+): string => {
+  const pool = colors?.filter((c) => c && esc(String(c)) !== compareTo)
+  if (!pool?.length) return fallback
+  return esc(String(pool[Math.floor(rand() * pool.length)]))
+}
+
+// pick a color that clears `minContrast` against `compareTo`; if none does,
+// take the highest-contrast one so the pattern is never invisible on the can
+const pickContrastingColor = (
+  colors: string[] | undefined,
+  rand: Rand,
+  compareTo: string,
+  fallback: string,
+  minContrast: number,
+): string => {
+  const pool = colors?.filter(Boolean)
+  if (!pool?.length) return fallback
+  const ok = pool.filter((c) => contrastRatio(String(c), compareTo) >= minContrast)
+  if (ok.length) return esc(String(ok[Math.floor(rand() * ok.length)]))
+  return esc(
+    String(
+      pool.reduce((best, c) =>
+        contrastRatio(String(c), compareTo) > contrastRatio(String(best), compareTo) ? c : best,
+      ),
+    ),
+  )
+}
+
 // polkadot-style grid of one SHAPES symbol: columns at equal angular
 // intervals, staggered rows, sin θ foreshortening at the edges. Fixed
 // placement, nothing seeded — shared by all the shape-based patterns.
@@ -163,7 +228,7 @@ function symbolGrid(shape: number, color: string): string {
   const k = SHAPE_SIZE / 16 // unit shapes have half-width ~16
   const shapes: string[] = []
   let row = 0
-  for (let y = L.y - step / 2; y < yMax + step; y += step, row++) {
+  for (let y = L.y - step / 2 + SYMBOL_Y_OFFSET; y < yMax + step; y += step, row++) {
     const half = row % 2 === 1 ? 0.5 : 0
     for (let i = 0; i + half <= cols; i++) {
       const a = ((i + half) / cols) * Math.PI
@@ -196,19 +261,20 @@ function pattern(type: number, rand: Rand, color: string): string {
       return shapes.join("")
     }
     case 1: {
-      // horizontal pinstripes — thin saw-toothed lines (sharp zigzag),
+      // sawtooth — thin saw-toothed lines (sharp zigzag),
       // fixed thickness and tooth size, evenly spaced, drooped onto the
       // cylinder; the count draw always collapses to 5 (floor(rand()+2) is
       // always 2) — kept anyway because dropping a draw would shift every
       // later draw and change every existing identicon, see DESIGN.md
       const count = 3 + Math.floor(rand() + 2)
       const step = (L.h + EDGE_RY) / count
+      const pinAnchor = L.x - 20
       for (let i = 0; i < count; i++) {
         const base = L.y + (i + 0.5) * step
         const pts: string[] = []
-        let j = 0
-        for (let px = L.x - 20; px <= x2 + 20 + PIN_GAP; px += PIN_GAP, j++) {
-          pts.push(`${n(px)},${n(base + (j % 2 ? PIN_TOOTH : -PIN_TOOTH) + droop(px))}`)
+        for (let px = pinAnchor + PIN_PHASE; px <= x2 + 20 + PIN_GAP; px += PIN_GAP) {
+          const tooth = Math.floor((px - pinAnchor) / PIN_GAP)
+          pts.push(`${n(px)},${n(base + (tooth % 2 ? PIN_TOOTH : -PIN_TOOTH) + droop(px))}`)
         }
         shapes.push(
           `<polyline points="${pts.join(" ")}" fill="none" stroke="${color}" stroke-width="${PIN_SIZE}"/>`,
@@ -221,12 +287,11 @@ function pattern(type: number, rand: Rand, color: string): string {
       // nothing seeded: every wave can has the same geometry, only colors vary
       const amp = 38
       const wl = 300
-      const gap = 325
-      const phase = 0
-      for (let y = L.y + gap / 2; y < yMax + amp; y += gap) {
+      const gap = 275
+      for (let y = L.y + gap / 2 + WAVE_Y_OFFSET; y < yMax + amp; y += gap) {
         const pts: string[] = []
         for (let px = L.x - 20; px <= x2 + 20; px += 25) {
-          pts.push(`${n(px)},${n(y - amp * Math.sin((px / wl) * 2 * Math.PI + phase))}`)
+          pts.push(`${n(px)},${n(y - amp * Math.sin((px / wl) * 2 * Math.PI + WAVE_PHASE))}`)
         }
         shapes.push(
           `<polyline points="${pts.join(" ")}" fill="none" stroke="${color}" stroke-width="${WAVE_SIZE}"/>`,
@@ -271,24 +336,33 @@ function pattern(type: number, rand: Rand, color: string): string {
       return shapes.join("")
     }
     case 5: {
-      // crosshatch — two mirrored sets of 45° diagonals drooped onto the
-      // cylinder; fixed thickness, only spacing/offset varies. Line ends
-      // overshoot the label edges so the clip cuts them cleanly.
-      const spacing = HATCH_SIZE * 5
-      const off = spacing
+      // crosshatch — two mirrored sets of 45° diagonals on the cylinder
+      // unwrap (straight in arc×height space, then mapped through
+      // onCylinder); fixed thickness, only spacing varies. Each family is
+      // phase-anchored to its rim corner (slash → top-left at a=0,
+      // backslash → top-right at a=π); arc range slightly overshoots [0, π]
+      // for clean stroke clipping at the sides.
+      const spacing = HATCH_SIZE * 7
+      const v0Step = spacing * Math.SQRT2
+      const arcOvershoot = (EDGE_RY + HATCH_SIZE) / RX
+      const a0 = -arcOvershoot
+      const a1 = Math.PI + arcOvershoot
+      const steps = Math.ceil(((a1 - a0) * RX) / 30)
+      const v0First = L.y - Math.ceil((L.h + spacing) / v0Step) * v0Step
+      const v0Last = L.y + L.h + spacing + RX * Math.PI
       for (const dir of [1, -1]) {
-        for (let x = L.x - L.h - off; x < x2; x += spacing) {
+        const v0Off = dir === 1 ? 0 : RX * Math.PI
+        for (let v0 = v0First + v0Off; v0 < v0Last + v0Off; v0 += v0Step) {
           const pts: string[] = []
-          const px1 = Math.min(x + L.h + 120, x2 + 30)
-          for (let px = Math.max(x - 120, L.x - 30); px <= px1; px += 30) {
-            const base = dir === 1 ? L.y + (px - x) : y2 - (px - x)
-            pts.push(`${n(px)},${n(base)}`)
+          for (let i = 0; i <= steps; i++) {
+            const a = a0 + (i / steps) * (a1 - a0)
+            const v = dir === 1 ? v0 + RX * a : v0 - RX * a
+            const [px, py] = onCylinder(a, v)
+            pts.push(`${n(px)},${n(py)}`)
           }
-          if (pts.length > 1) {
-            shapes.push(
-              `<polyline points="${pts.join(" ")}" fill="none" stroke="${color}" stroke-width="${HATCH_SIZE}"/>`,
-            )
-          }
+          shapes.push(
+            `<polyline points="${pts.join(" ")}" fill="none" stroke="${color}" stroke-width="${HATCH_SIZE}"/>`,
+          )
         }
       }
       return shapes.join("")
@@ -390,7 +464,7 @@ function pattern(type: number, rand: Rand, color: string): string {
       // ⅙, ½, ⅚ of the width), drooped onto the cylinder like the waves
       // pattern. Nothing seeded.
       const amp = 40
-      const mid = L.y + L.h / 2 - PATTERN_CURVE / 2
+      const mid = L.y + L.h / 3 - PATTERN_CURVE / 2
       const pts: string[] = []
       for (let px = L.x - 40; px <= x2 + 40; px += 25) {
         const t = (px - L.x) / L.w
@@ -483,18 +557,6 @@ export function identican(seed: string, options: IdenticanOptions = {}): string 
   const patternSat = 55 + rand() * 25
   const patternL = 50 + rand() * 10
 
-  // Custom palette: when a layer's pool exists, pick a color from it (seeded)
-  // to override that layer's seeded color. Draws happen in a fixed order —
-  // backgrounds, cans, patterns — AFTER every hue draw above, and only when
-  // the pool exists, so a no-palette call draws nothing here and its output
-  // is unchanged (see the golden-hash test). Colors are escaped and used
-  // verbatim: the saturation/lightness knobs and the contrast guard do not
-  // touch them.
-  const pick = (arr: string[]): string => esc(String(arr[Math.floor(rand() * arr.length)]))
-  const bgPick = bgPool && pick(bgPool)
-  const canPick = canPool && pick(canPool)
-  const patPick = patPool && pick(patPool)
-
   const ps = Math.min(100, Math.max(0, patternSat * saturation))
   let pl = Math.min(100, Math.max(0, patternL * lightness))
   const cs = Math.min(100, Math.max(0, 60 * saturation))
@@ -510,12 +572,30 @@ export function identican(seed: string, options: IdenticanOptions = {}): string 
   // separates better than dropping down — hence the single-direction bump.
   const lift = 35 * Math.min(1, lightness) * Math.max(0, 1 - saturation / 0.6)
   if (lift > 0 && sep(pl) < 0.15) pl = Math.min(100, pl + lift)
-  const patternColor = patPick ?? hsl(patternHue, ps, pl)
 
+  // Seeded defaults (auto mode). A no-palette call uses these verbatim and
+  // touches none of the palette RNGs below, so its output is byte-identical to
+  // before the palette feature (the golden-hash test guards this).
+  const defaultPatternColor = hsl(patternHue, ps, pl)
   // bgA doubles as the solid background, so solid and gradient stay consistent
-  const bgA = bgPick ?? col(baseHue, 72, 74)
-  const bgB = bgPick ?? col(baseHue + 25, 80, 55)
-  const canColor = canPick ?? col(canHue, 60, 52)
+  const defaultBgA = col(baseHue, 72, 74)
+  const defaultBgB = col(baseHue + 25, 80, 55)
+  const defaultCanColor = col(canHue, 60, 52)
+
+  // Custom palette (when a pool is set): each layer picks from its own RNG so
+  // the choices never disturb the main draw sequence above. Background gets two
+  // distinct gradient stops; the pattern is chosen to contrast the can so it
+  // stays visible.
+  const bgRand = paletteRoleRand(seed, "background", bgPool)
+  const canRand = paletteRoleRand(seed, "can", canPool)
+  const patRand = paletteRoleRand(seed, "pattern", patPool)
+  const bgFirst = pickColor(bgPool, bgRand, defaultBgA)
+  const bgSecond = pickDifferentColor(bgPool, bgRand, bgFirst, defaultBgB)
+  // lighter stop on top, darker on the bottom (only reorders when both stops
+  // are hex picks — a seeded hsl() fallback keeps its order)
+  const [bgA, bgB] = lighterFirst(bgFirst, bgSecond)
+  const canColor = pickColor(canPool, canRand, defaultCanColor)
+  const patternColor = pickContrastingColor(patPool, patRand, canColor, defaultPatternColor, 1.8)
 
   const bgFill = background === "gradient" ? `url(#${id}-bg)` : bgA
   const svg =
