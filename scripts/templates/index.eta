@@ -7,6 +7,27 @@
 <% block("scripts", () => { %>
 <script>
 <%~ it.lib %>
+<%~ it.themes %>
+// active demo theme from ?theme=; its palette tracks the resolved light/dark
+const params = new URLSearchParams(location.search);
+const activeTheme = THEMES[params.get("theme")] || null;
+const resolvedTheme = () => document.documentElement.classList.contains("dark") ? "dark" : "light";
+if (activeTheme) {
+  sat.disabled = true;
+  light.disabled = true;
+}
+// ?z= ?s= ?l= — set slider defaults; invalid values are ignored
+const applySliderParam = (key, input) => {
+  const raw = params.get(key);
+  if (raw === null) return;
+  const n = +raw;
+  if (!Number.isFinite(n) || n < +input.min || n > +input.max) return;
+  input.value = String(n);
+};
+applySliderParam("z", zoom);
+applySliderParam("s", sat);
+applySliderParam("l", light);
+let onThemeChange = null; // set to render() once it exists; re-renders on light/dark switch
 const themeKey = "identican-theme";
 const themeSwitcher = document.getElementById("theme-switcher");
 const themeButtons = document.querySelectorAll(".theme-btn");
@@ -25,6 +46,7 @@ const applyTheme = (theme) => {
     btn.classList.toggle("dark:text-zinc-100", active);
     btn.setAttribute("aria-pressed", active);
   });
+  onThemeChange?.();
 };
 
 const setTheme = (theme) => {
@@ -54,7 +76,8 @@ const bgButtons = document.querySelectorAll(".bg-btn");
 let bg = "gradient";
 const render = () => {
   // theme fixed for this render pass; size passed per call
-  const can = new Identican({ background: bg, saturation: +sat.value, lightness: +light.value, zoom: +zoom.value });
+  const themeOpts = activeTheme ? activeTheme.options(resolvedTheme()) : {};
+  const can = new Identican({ ...themeOpts, background: bg, saturation: +sat.value, lightness: +light.value, zoom: +zoom.value });
   document.getElementById("sat-val").textContent = (+sat.value).toFixed(2);
   document.getElementById("light-val").textContent = (+light.value).toFixed(2);
   document.getElementById("zoom-val").textContent = (+zoom.value).toFixed(2);
@@ -92,6 +115,7 @@ seed.addEventListener("input", render);
 sat.addEventListener("input", render);
 light.addEventListener("input", render);
 zoom.addEventListener("input", render);
+onThemeChange = render;
 setBg("gradient");
 </script>
 <% }) %>

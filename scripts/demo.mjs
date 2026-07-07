@@ -23,6 +23,16 @@ writeFileSync(tmp, code)
 const { Identican } = await import(tmp)
 const lib = code.replace(/export\s*\{[^}]*\};?\s*$/, "")
 
+// demo themes bundle — inlined into the page (export stripped) so the `?theme=`
+// switcher can read `THEMES` in the browser over file://
+const themesBuild = await build({
+  entryPoints: [fileURLToPath(new URL("./themes/index.mjs", import.meta.url))],
+  bundle: true,
+  format: "esm",
+  write: false,
+})
+const themes = themesBuild.outputFiles[0].text.replace(/export\s*\{[^}]*\};?\s*$/, "")
+
 const GALLERY_SIZE = 128
 
 const can = new Identican()
@@ -35,7 +45,7 @@ const eta = new Eta({ views: fileURLToPath(new URL("./templates", import.meta.ur
 
 writeFileSync(
   new URL("../index.html", import.meta.url),
-  eta.render("index", { cells, lib, gallerySize: GALLERY_SIZE }) + "\n",
+  eta.render("index", { cells, lib, themes, gallerySize: GALLERY_SIZE }) + "\n",
 )
 
 console.log("wrote index.html")

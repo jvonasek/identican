@@ -70,17 +70,28 @@ Output is identical to `identican(seed, { ...theme, ...renderOptions })`.
 
 Returns SVG markup as a string.
 
-| Option       | Type                              | Default      | Description                                                                                      |
-| ------------ | --------------------------------- | ------------ | ------------------------------------------------------------------------------------------------ |
-| `size`       | `number`                          | `128`        | `width`/`height` attributes in px. The SVG has a `viewBox`, so it scales to any size regardless. |
-| `background` | `"gradient" \| "solid" \| "none"` | `"gradient"` | Background fill: seeded diagonal gradient, a solid seeded color, or none (transparent).          |
-| `title`      | `string`                          | —            | Accessible name (`aria-label`). Omitted = `aria-hidden="true"` (decorative)                      |
-| `saturation` | `number`                          | `1`          | Multiplier on every color's saturation. `0` = grayscale, `>1` more vivid.                        |
-| `lightness`  | `number`                          | `1`          | Multiplier on every color's lightness. `<1` darker/moodier, `>1` lighter/pastel.                 |
-| `zoom`       | `number`                          | `1`          | Adjust the can zoom in the viewbox. `>1` to zoom in, `<1` to zoom out.                           |
+| Option       | Type                              | Default      | Description                                                                                            |
+| ------------ | --------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------ |
+| `size`       | `number`                          | `128`        | `width`/`height` attributes in px. The SVG has a `viewBox`, so it scales to any size regardless.       |
+| `background` | `"gradient" \| "solid" \| "none"` | `"gradient"` | Background fill: seeded diagonal gradient, a solid seeded color, or none (transparent).                |
+| `title`      | `string`                          | —            | Accessible name (`aria-label`). Omitted = `aria-hidden="true"` (decorative)                            |
+| `saturation` | `number`                          | `1`          | Multiplier on every color's saturation. `0` = grayscale, `>1` more vivid.                              |
+| `lightness`  | `number`                          | `1`          | Multiplier on every color's lightness. `<1` darker/moodier, `>1` lighter/pastel.                       |
+| `zoom`       | `number`                          | `1`          | Adjust the can zoom in the viewbox. `>1` to zoom in, `<1` to zoom out.                                 |
 | `palette`    | `IdenticanPalette`                | —            | Custom color pools per layer; see [Custom palette](#custom-palette). Layers with no array stay seeded. |
 
 Any string is a valid seed, including the empty string. Output is fully deterministic — no `Math.random`, no time. Identical bytes across engines in practice; see `docs/DESIGN.md` for the one theoretical caveat (trig rounding).
+
+### `identicanDataUri(seed: string, options?): string`
+
+`identican()` output wrapped as a `data:image/svg+xml` URI, for `<img src>` / CSS `url()`.
+
+### `new Identican(theme?)`
+
+Callable instance with the theme fixed at construction. `theme` accepts
+`background`, `saturation`, `lightness`, `zoom`, `palette` (same meaning as the
+`identican()` options above). Call the instance as `can(seed, { size?, title? })`; it returns
+`{ toSvg(): string; toDataURL(): string }`.
 
 ### Custom palette
 
@@ -114,17 +125,6 @@ not apply to palette colors — with a custom palette, keeping colors legible
 against each other is your responsibility. An absent field or an empty array
 means "no pool", i.e. that layer stays seeded, exactly as if `palette` were
 omitted.
-
-### `identicanDataUri(seed: string, options?): string`
-
-`identican()` output wrapped as a `data:image/svg+xml` URI, for `<img src>` / CSS `url()`.
-
-### `new Identican(theme?)`
-
-Callable instance with the theme fixed at construction. `theme` accepts
-`background`, `saturation`, `lightness`, `zoom`, `palette` (same meaning as the
-`identican()` options above). Call the instance as `can(seed, { size?, title? })`; it returns
-`{ toSvg(): string; toDataURL(): string }`.
 
 ## How it works
 
