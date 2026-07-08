@@ -1,6 +1,6 @@
 {
   "name": "identican",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Deterministic Soda-Can SVG Identicons",
   "keywords": [
     "identicon",
