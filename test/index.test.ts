@@ -280,9 +280,9 @@ test("Identican theme carries the palette", () => {
 // If you did NOT intend a visual change, your change reordered/added/removed
 // a rand() draw or altered emitted markup: fix that instead.
 const GOLDEN: [string, Parameters<typeof identican>[1], string][] = [
-  ["hello", {}, "2046f9750d7708ac4f6048f9c168d0ca381063bf2b97229ff312df211bfba01b"],
-  ["", {}, "053f3c9c1828c74ad72ad1a7dedf4de7861a617a75f8a33721fb1244df12bfa7"],
-  ["user-0", {}, "df448122f14d1620783e60fcbd828fa755c302f8b0e0cd22726ef437ba333c68"],
+  ["hello", {}, "be1c7298974dea3a50e852a65dfe6e8d5ebf8795d623c101259540f516c34f58"],
+  ["", {}, "5946ace441819adc1d34824df23542cf9dd5c09c55de15bab1887d4236fbea54"],
+  ["user-0", {}, "f3d0c47276cd088706a8f4aeba7f498e2621b03c529f9ef2cc11ba1005e7dcd8"],
   [
     "user-1",
     { background: "solid" },
@@ -296,12 +296,12 @@ const GOLDEN: [string, Parameters<typeof identican>[1], string][] = [
   [
     "user@example.com",
     { size: 64 },
-    "9ccd3afebd0b8a28f7e5f5ee2134b54a9862bb464c597eaa30d2b74caf86ef9b",
+    "65b11cd8126b0e4c7bc6ed388611187560a9d7abdf13963e60d482823d4a8638",
   ],
   [
     "user-3",
     { palette: { backgrounds: ["#0a0a0a"], cans: ["#e11d48"], patterns: ["#22d3ee"] } },
-    "30dc67d71f27233c1649cc31baeac2825270a130aa1c5326b5e8258c9e92a450",
+    "b640eda2afa4d27e5fa59d247e4d412edb074baf4ee88fa3f0be5f62778e6049",
   ],
 ]
 

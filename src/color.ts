@@ -75,9 +75,9 @@ const parseColorHsl = (color: string): { h: number; s: number; l: number } | nul
 // independently: rotate the hue a third of the wheel (108° = 30% of 360) and
 // darken to 70% lightness, so B always reads as a shaded relative of A — and is
 // darker than A by construction, keeping the lighter stop on top.
-const STOP_HUE_SHIFT = 108
-const STOP_DARKEN = 0.9
-const STOP_SATURATION = 0.5
+const STOP_HUE_SHIFT = 70
+const STOP_DARKEN = 0.7
+const STOP_SATURATION = 0.7
 export function deriveStop(color: string): string {
   const c = parseColorHsl(color)
   if (!c) return color // unknown format: no companion shade, reuse the color
