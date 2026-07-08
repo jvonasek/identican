@@ -71,6 +71,13 @@ const parseColorHsl = (color: string): { h: number; s: number; l: number } | nul
   return rgb ? rgbToHsl(rgb.r, rgb.g, rgb.b) : null
 }
 
+// Hue (0–360) of an `hsl(...)` string or hex color; null for anything else.
+// Used to pick a custom background that best complements the chosen can color.
+export const hueOf = (color: string): number | null => {
+  const c = parseColorHsl(color)
+  return c ? c.h : null
+}
+
 // Derive the second gradient stop from the first instead of picking it
 // independently: rotate the hue a third of the wheel (108° = 30% of 360) and
 // darken to 70% lightness, so B always reads as a shaded relative of A — and is

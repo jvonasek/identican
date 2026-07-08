@@ -1,11 +1,13 @@
 import { TEMPLATE_D } from "./template.js"
-import { lum, contrastRatio, deriveStop } from "./color.js"
+import { lum, contrastRatio, deriveStop, hueOf } from "./color.js"
 
 /** Custom color pools. When an array is set, its layer's color is picked from
  * the array (seeded, from a per-layer RNG that never disturbs the can's
  * geometry) instead of being derived from the seed's hue. Colors are used
  * verbatim — the `saturation`/`lightness` knobs don't apply. The background
- * gradient's first stop is drawn from `backgrounds`; its second stop is
+ * gradient's first stop is a random pick from `backgrounds`, re-rolled toward
+ * the can's complement only when the pick lands too close in hue to the can (so
+ * the can never blends in while variety is otherwise kept); its second stop is
  * *derived* from that pick (hue rotated a third of the wheel and darkened), not
  * a separate pool color. `patterns` is filtered to the
  * colors that contrast the chosen can color (highest-contrast if none clear the
@@ -202,6 +204,42 @@ const pickContrastingColor = (
       ),
     ),
   )
+}
+
+// Minimum hue separation (degrees) we want between a custom background and the
+// can before they read as blending. A background below this is "too similar".
+const BG_MIN_HUE_SEP = 60
+
+// Pick a background from the pool at random (keeping full variety), but if the
+// pick lands too close in hue to the can, re-pick from the pool colors that do
+// clear the separation bar — or, if none do, the most-separated (closest to the
+// complement) color. Colors whose hue can't be read count as fine.
+const pickBackgroundColor = (
+  colors: string[] | undefined,
+  rand: Rand,
+  compareTo: string,
+  fallback: string,
+): string => {
+  const pool = colors?.filter(Boolean)
+  if (!pool?.length) return fallback
+  const target = hueOf(compareTo)
+  // hue separation (0..180) between a color and the can; null when either hue
+  // is unreadable — such colors are treated as clearing the bar
+  const sep = (c: string): number | null => {
+    const h = hueOf(String(c))
+    if (h === null || target === null) return null
+    const diff = (((h - target) % 360) + 360) % 360
+    return Math.min(diff, 360 - diff)
+  }
+  // random pick first — this is what preserves the variance
+  const pick = pool[Math.floor(rand() * pool.length)]
+  const s = sep(pick)
+  if (s === null || s >= BG_MIN_HUE_SEP) return esc(String(pick))
+  // too similar: prefer a random one among the colors that clear the bar,
+  // else fall back to the most-separated color in the pool
+  const ok = pool.filter((c) => (sep(c) ?? 180) >= BG_MIN_HUE_SEP)
+  if (ok.length) return esc(String(ok[Math.floor(rand() * ok.length)]))
+  return esc(String(pool.reduce((best, c) => ((sep(c) ?? 0) > (sep(best) ?? 0) ? c : best))))
 }
 
 // polkadot-style grid of one SHAPES symbol: columns at equal angular
@@ -630,13 +668,15 @@ export function identican(seed: string, options: IdenticanOptions = {}): string 
   const bgRand = paletteRoleRand(seed, "background")
   const canRand = paletteRoleRand(seed, "can")
   const patRand = paletteRoleRand(seed, "pattern")
-  // Stop A is the seeded default or a pool pick; stop B is derived from it —
-  // hue rotated a third of the wheel and darkened — so the two stops always
-  // share a family and the darker one sits on the bottom (offset 1) by
-  // construction.
-  const bgA = pickColor(bgPool, bgRand, defaultBgA)
-  const bgB = deriveStop(bgA)
+  // The can is picked first so the background can be checked against it.
   const canColor = pickColor(canPool, canRand, defaultCanColor)
+  // Stop A is the seeded default, or — from a custom `backgrounds` pool — a
+  // random pick, re-rolled toward the complement only when it lands too close
+  // in hue to the can. Stop B is derived from A — hue rotated a third of the
+  // wheel and darkened — so the two stops always share a family and the darker
+  // one sits on the bottom (offset 1) by construction.
+  const bgA = pickBackgroundColor(bgPool, bgRand, canColor, defaultBgA)
+  const bgB = deriveStop(bgA)
   const patternColor = pickContrastingColor(patPool, patRand, canColor, defaultPatternColor, 1.8)
 
   const bgFill = background === "gradient" ? `url(#${id}-bg)` : bgA

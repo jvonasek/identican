@@ -213,6 +213,36 @@ test("gradient keeps the derived (darker) stop on the bottom", () => {
   }
 })
 
+test("background avoids a hue too similar to the can, but stays random otherwise", () => {
+  // pool of two distinct, non-blending backgrounds against a red can (~348°):
+  // random picking must use BOTH across seeds (variety is preserved)
+  const a = "#22d3ee" // ~187° — near the can's complement
+  const b = "#84cc16" // ~83° — well clear of the can's hue
+  const bgOf = (svg: string) => svg.match(/fill="(#[0-9a-f]{6})"/i)?.[1]
+  const picks = new Set(
+    ["a", "b", "c", "d", "e", "f", "g", "h"].map((seed) =>
+      bgOf(
+        identican(seed, {
+          background: "solid",
+          palette: { cans: ["#e11d48"], backgrounds: [a, b] },
+        }),
+      ),
+    ),
+  )
+  assert.ok(picks.has(a) && picks.has(b), `both bg colors should appear: ${[...picks]}`)
+
+  // now add a bg that is near-analogous to the can (would blend): it must never
+  // be chosen while non-blending options exist
+  const same = "#f97316" // ~25° — same warm family as the can
+  for (const seed of ["a", "b", "c", "d", "e", "f", "g", "h"]) {
+    const svg = identican(seed, {
+      background: "solid",
+      palette: { cans: ["#e11d48"], backgrounds: [a, b, same] },
+    })
+    assert.ok(!svg.includes(`"${same}"`), `seed ${seed} must not pick blending bg ${same}`)
+  }
+})
+
 test("pattern is picked to contrast the can, not just verbatim", () => {
   // one high-contrast + one near-invisible pattern color against the can:
   // the low-contrast one must never be chosen while a better option exists
