@@ -205,8 +205,8 @@ test("gradient keeps the derived (darker) stop on the bottom", () => {
   for (const seed of ["a", "b", "c", "d", "e", "f"]) {
     const svg = identican(seed, { palette: { backgrounds: ["#eeeeee"] } })
     // bg stops close right after stop-color; the highlight gradient's stops carry
-  // a stop-opacity, so this only captures the two background stops
-  const stops = [...svg.matchAll(/stop-color="([^"]+)"\/>/gi)].map((m) => m[1])
+    // a stop-opacity, so this only captures the two background stops
+    const stops = [...svg.matchAll(/stop-color="([^"]+)"\/>/gi)].map((m) => m[1])
     assert.equal(stops[0], "#eeeeee") // pool pick on top
     const l = Number(stops[1].match(/([\d.]+)%\)$/)![1]) // derived lightness
     assert.ok(l < 93, `derived stop should be darker than #eeeeee: ${stops[1]}`)

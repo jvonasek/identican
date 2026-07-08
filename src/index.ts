@@ -173,8 +173,7 @@ type Rand = () => number
 // color then only re-colors the cans that landed on it, instead of reshuffling
 // every pick. Picked colors are used verbatim (only HTML-escaped); the
 // saturation/lightness knobs don't apply to them.
-const paletteRoleRand = (seed: string, role: string): Rand =>
-  mulberry32(fnv1a(`${seed}|${role}`))
+const paletteRoleRand = (seed: string, role: string): Rand => mulberry32(fnv1a(`${seed}|${role}`))
 
 // pick any color from the pool; fall back to the seeded default when empty
 const pickColor = (colors: string[] | undefined, rand: Rand, fallback: string): string => {
