@@ -1,12 +1,13 @@
 import { TEMPLATE_D } from "./template.js"
-import { lum, contrastRatio, lighterFirst } from "./color.js"
+import { lum, contrastRatio, deriveStop } from "./color.js"
 
 /** Custom color pools. When an array is set, its layer's color is picked from
  * the array (seeded, from a per-layer RNG that never disturbs the can's
  * geometry) instead of being derived from the seed's hue. Colors are used
  * verbatim — the `saturation`/`lightness` knobs don't apply. The background
- * gradient draws two *different* colors from `backgrounds` (falling back to a
- * seeded stop when the pool has only one), and `patterns` is filtered to the
+ * gradient's first stop is drawn from `backgrounds`; its second stop is
+ * *derived* from that pick (hue rotated a third of the wheel and darkened), not
+ * a separate pool color. `patterns` is filtered to the
  * colors that contrast the chosen can color (highest-contrast if none clear the
  * bar), so the pattern stays visible. */
 export interface IdenticanPalette {
@@ -165,29 +166,19 @@ const SHAPES = [
 
 type Rand = () => number
 
-// Custom-palette picking. Each layer draws from its own seeded RNG
-// (seed|role|colors) so palette choices never disturb the main draw sequence —
-// the can's geometry is identical whether or not a palette is set, and a
-// no-palette call touches none of this. Picked colors are used verbatim
-// (only HTML-escaped); the saturation/lightness knobs don't apply to them.
-const paletteRoleRand = (seed: string, role: string, colors?: string[]): Rand =>
-  mulberry32(fnv1a(`${seed}|${role}|${colors?.join(",") ?? ""}`))
+// Custom-palette picking. Each layer draws from its own seeded RNG (seed|role)
+// so palette choices never disturb the main draw sequence — the can's geometry
+// is identical whether or not a palette is set, and a no-palette call touches
+// none of this. The pool's contents are deliberately NOT in the seed: editing a
+// color then only re-colors the cans that landed on it, instead of reshuffling
+// every pick. Picked colors are used verbatim (only HTML-escaped); the
+// saturation/lightness knobs don't apply to them.
+const paletteRoleRand = (seed: string, role: string): Rand =>
+  mulberry32(fnv1a(`${seed}|${role}`))
 
 // pick any color from the pool; fall back to the seeded default when empty
 const pickColor = (colors: string[] | undefined, rand: Rand, fallback: string): string => {
   const pool = colors?.filter(Boolean)
-  if (!pool?.length) return fallback
-  return esc(String(pool[Math.floor(rand() * pool.length)]))
-}
-
-// pick a color different from `compareTo` (so the two gradient stops differ)
-const pickDifferentColor = (
-  colors: string[] | undefined,
-  rand: Rand,
-  compareTo: string,
-  fallback: string,
-): string => {
-  const pool = colors?.filter((c) => c && esc(String(c)) !== compareTo)
   if (!pool?.length) return fallback
   return esc(String(pool[Math.floor(rand() * pool.length)]))
 }
@@ -628,23 +619,24 @@ export function identican(seed: string, options: IdenticanOptions = {}): string 
   // touches none of the palette RNGs below, so its output is byte-identical to
   // before the palette feature (the golden-hash test guards this).
   const defaultPatternColor = hsl(patternHue, ps, pl)
-  // bgA doubles as the solid background, so solid and gradient stay consistent
+  // stop A doubles as the solid background, so solid and gradient stay consistent;
+  // stop B is derived from A (see below), never seeded on its own
   const defaultBgA = col(baseHue, 72, 74)
-  const defaultBgB = col(baseHue + 25, 80, 55)
   const defaultCanColor = col(canHue, 60, 52)
 
   // Custom palette (when a pool is set): each layer picks from its own RNG so
   // the choices never disturb the main draw sequence above. Background gets two
   // distinct gradient stops; the pattern is chosen to contrast the can so it
   // stays visible.
-  const bgRand = paletteRoleRand(seed, "background", bgPool)
-  const canRand = paletteRoleRand(seed, "can", canPool)
-  const patRand = paletteRoleRand(seed, "pattern", patPool)
-  const bgFirst = pickColor(bgPool, bgRand, defaultBgA)
-  const bgSecond = pickDifferentColor(bgPool, bgRand, bgFirst, defaultBgB)
-  // lighter stop on top, darker on the bottom (only reorders when both stops
-  // are hex picks — a seeded hsl() fallback keeps its order)
-  const [bgA, bgB] = lighterFirst(bgFirst, bgSecond)
+  const bgRand = paletteRoleRand(seed, "background")
+  const canRand = paletteRoleRand(seed, "can")
+  const patRand = paletteRoleRand(seed, "pattern")
+  // Stop A is the seeded default or a pool pick; stop B is derived from it —
+  // hue rotated a third of the wheel and darkened — so the two stops always
+  // share a family and the darker one sits on the bottom (offset 1) by
+  // construction.
+  const bgA = pickColor(bgPool, bgRand, defaultBgA)
+  const bgB = deriveStop(bgA)
   const canColor = pickColor(canPool, canRand, defaultCanColor)
   const patternColor = pickContrastingColor(patPool, patRand, canColor, defaultPatternColor, 1.8)
 
@@ -656,7 +648,7 @@ export function identican(seed: string, options: IdenticanOptions = {}): string 
     `<defs>` +
     (background === "gradient"
       ? `<linearGradient id="${id}-bg" x1="0" y1="0" x2="1" y2="1">` +
-        `<stop offset="0" stop-color="${bgA}"/><stop offset="1" stop-color="${bgB}"/>` +
+        `<stop offset="0.25" stop-color="${bgA}"/><stop offset="1" stop-color="${bgB}"/>` +
         `</linearGradient>`
       : "") +
     `<linearGradient id="${id}-hl">` +

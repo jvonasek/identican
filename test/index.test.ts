@@ -184,22 +184,32 @@ test("palette overrides the seeded colors verbatim", () => {
   assert.match(svg, /(fill|stroke)="#22d3ee"/)
 })
 
-test("gradient uses two different background colors from the pool", () => {
+test("gradient derives the second stop from the pool pick", () => {
+  // stop A is a color from the pool; stop B is not a separate pool color but a
+  // derived shade (an hsl() string), so the two stops always differ.
   const svg = identican("hello", {
     palette: { backgrounds: ["#0a0a0a", "#f0f0f0"] },
   })
-  const stops = [...svg.matchAll(/stop-color="(#[0-9a-f]{6})"/gi)].map((m) => m[1])
+  // bg stops close right after stop-color; the highlight gradient's stops carry
+  // a stop-opacity, so this only captures the two background stops
+  const stops = [...svg.matchAll(/stop-color="([^"]+)"\/>/gi)].map((m) => m[1])
   assert.equal(stops.length, 2)
-  assert.notEqual(stops[0], stops[1]) // never a flat fill when the pool allows it
+  assert.ok(["#0a0a0a", "#f0f0f0"].includes(stops[0]), `top stop from pool: ${stops[0]}`)
+  assert.match(stops[1], /^hsl\(/) // derived shade, not a raw pool color
+  assert.notEqual(stops[0], stops[1]) // never a flat fill
 })
 
-test("gradient orders the lighter background color on top", () => {
-  // whichever way the two stops are picked, the top (offset 0.3) must be the
-  // lighter one and the bottom (offset 1) the darker
+test("gradient keeps the derived (darker) stop on the bottom", () => {
+  // the derived stop B keeps 70% of A's lightness, so the bottom (offset 1) is
+  // always darker than the top (offset 0) — lighter stop on top by construction
   for (const seed of ["a", "b", "c", "d", "e", "f"]) {
-    const svg = identican(seed, { palette: { backgrounds: ["#111111", "#eeeeee"] } })
-    const stops = [...svg.matchAll(/stop-color="(#[0-9a-f]{6})"/gi)].map((m) => m[1])
-    assert.deepEqual(stops, ["#eeeeee", "#111111"], `seed ${seed}`)
+    const svg = identican(seed, { palette: { backgrounds: ["#eeeeee"] } })
+    // bg stops close right after stop-color; the highlight gradient's stops carry
+  // a stop-opacity, so this only captures the two background stops
+  const stops = [...svg.matchAll(/stop-color="([^"]+)"\/>/gi)].map((m) => m[1])
+    assert.equal(stops[0], "#eeeeee") // pool pick on top
+    const l = Number(stops[1].match(/([\d.]+)%\)$/)![1]) // derived lightness
+    assert.ok(l < 93, `derived stop should be darker than #eeeeee: ${stops[1]}`)
   }
 })
 
@@ -270,9 +280,9 @@ test("Identican theme carries the palette", () => {
 // If you did NOT intend a visual change, your change reordered/added/removed
 // a rand() draw or altered emitted markup: fix that instead.
 const GOLDEN: [string, Parameters<typeof identican>[1], string][] = [
-  ["hello", {}, "134045dbda6cc05aad6eabc5cea7ae3a838df3fc1f25190408e223251cadf729"],
-  ["", {}, "62ae1ab47293657fd932b80636487c6d17a31318ba188632c0eaaf7ffe9235fd"],
-  ["user-0", {}, "17d441406288cc65583a7b9a0dc17ef2cd365ffc819343309231472ec3a1526e"],
+  ["hello", {}, "2046f9750d7708ac4f6048f9c168d0ca381063bf2b97229ff312df211bfba01b"],
+  ["", {}, "053f3c9c1828c74ad72ad1a7dedf4de7861a617a75f8a33721fb1244df12bfa7"],
+  ["user-0", {}, "df448122f14d1620783e60fcbd828fa755c302f8b0e0cd22726ef437ba333c68"],
   [
     "user-1",
     { background: "solid" },
@@ -286,12 +296,12 @@ const GOLDEN: [string, Parameters<typeof identican>[1], string][] = [
   [
     "user@example.com",
     { size: 64 },
-    "6a1d6264fba0cd46c16e96e3d3728c10c3ae6118b3db868303f8327c5e4a59c0",
+    "9ccd3afebd0b8a28f7e5f5ee2134b54a9862bb464c597eaa30d2b74caf86ef9b",
   ],
   [
     "user-3",
     { palette: { backgrounds: ["#0a0a0a"], cans: ["#e11d48"], patterns: ["#22d3ee"] } },
-    "bcb782a5d336bd10f6fe68b68164607468473e9db782e240077818548c9e9d1a",
+    "30dc67d71f27233c1649cc31baeac2825270a130aa1c5326b5e8258c9e92a450",
   ],
 ]
 

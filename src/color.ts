@@ -47,9 +47,42 @@ export function contrastRatio(a: string, b: string): number {
   return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)
 }
 
-// Order two colors [lighter, darker] — but only when both are hex, so seeded
-// `hsl()` stops (auto mode, single-color fallback) keep their original order.
-export function lighterFirst(a: string, b: string): [string, string] {
-  if (!parseHexColor(a) || !parseHexColor(b)) return [a, b]
-  return colorLuminance(a) >= colorLuminance(b) ? [a, b] : [b, a]
+const rgbToHsl = (r: number, g: number, b: number): { h: number; s: number; l: number } => {
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const l = (max + min) / 2
+  const d = max - min
+  let h = 0
+  let s = 0
+  if (d) {
+    s = d / (1 - Math.abs(2 * l - 1))
+    h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+    h *= 60
+  }
+  return { h: ((h % 360) + 360) % 360, s: s * 100, l: l * 100 }
+}
+
+// Accept either an `hsl(H S% L%)` string (seeded stops) or a hex color (custom
+// palette) and return its HSL components; null for anything else.
+const parseColorHsl = (color: string): { h: number; s: number; l: number } | null => {
+  const m = color.match(/^hsl\(\s*([\d.]+)\s+([\d.]+)%\s+([\d.]+)%\s*\)$/i)
+  if (m) return { h: +m[1], s: +m[2], l: +m[3] }
+  const rgb = parseHexColor(color)
+  return rgb ? rgbToHsl(rgb.r, rgb.g, rgb.b) : null
+}
+
+// Derive the second gradient stop from the first instead of picking it
+// independently: rotate the hue a third of the wheel (108° = 30% of 360) and
+// darken to 70% lightness, so B always reads as a shaded relative of A — and is
+// darker than A by construction, keeping the lighter stop on top.
+const STOP_HUE_SHIFT = 108
+const STOP_DARKEN = 0.9
+const STOP_SATURATION = 0.5
+export function deriveStop(color: string): string {
+  const c = parseColorHsl(color)
+  if (!c) return color // unknown format: no companion shade, reuse the color
+  const h = Math.round((c.h + STOP_HUE_SHIFT) % 360)
+  const s = Math.round(Math.max(0, c.s * STOP_SATURATION))
+  const l = Math.round(Math.max(0, c.l * STOP_DARKEN))
+  return `hsl(${h} ${s}% ${l}%)`
 }
