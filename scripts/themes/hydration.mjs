@@ -19,12 +19,12 @@ const HYDRATION_IDENTICAN_PATTERN_COLORS = [
   "#DFB1F3",
 ]
 export const HYDRATION_LIGHT_IDENTICAN_PALETTE = {
-  backgrounds: ["#FFDEEC", "#E7ECE1", "#B3D7FA", "#DFB1F3", "#AAEEFC", "#F9AFCA", "#98AFFF"],
+  backgrounds: ["#ffdeec", "#fab6cf", "#dfb1f3", "#e7ece1", "#aaeefc", "#b3d7fa", "#98afff"],
   cans: HYDRATION_IDENTICAN_CAN_COLORS,
   patterns: HYDRATION_IDENTICAN_PATTERN_COLORS,
 }
 export const HYDRATION_DARK_IDENTICAN_PALETTE = {
-  backgrounds: ["#240E32", "#36154B", "#2B1D3C", "#111A15", "#043875"],
+  backgrounds: ["#560024", "#49051e", "#390a4c", "#2a351d", "#033e4a", "#043267", "#001049"],
   cans: HYDRATION_IDENTICAN_CAN_COLORS,
   patterns: HYDRATION_IDENTICAN_PATTERN_COLORS,
 }

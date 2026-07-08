@@ -91,17 +91,17 @@ const CX = L.x + RX
 // vertical droop (in units) at the can's center. EDGE_RY flattens it to the
 // drawn rims; deliberately stronger so the wrap reads clearly.
 const PATTERN_CURVE = 72
-const STRIPE_SIZE = 64 // horizontal stripe height
-const PIN_SIZE = 50 // pinstripe thickness
-const PIN_TOOTH = 60 // pinstripe saw tooth half-height
-const PIN_GAP = 90 // pinstripe horizontal distance between tooth peak and valley
-const PIN_PHASE = -10 // horizontal phase of the sawtooth (template units)
+const STRIPE_SIZE = 100 // horizontal stripe height
+const CHEVRON_COUNT = 3 // number of stacked chevrons (centered in the label)
+const CHEVRON_SIZE = 100 // chevron stroke thickness
+const CHEVRON_SPACING = 300 // vertical distance between stacked chevron apexes
+const CHEVRON_DROP = 300 // vertical drop from apex to the leg ends at the sides
+const CHEVRON_BOW = 1 // leg curve exponent (<1 bows the legs outward, apex stays pointed)
 const DOT_SIZE = 100 // polkadot radius
 const WAVE_SIZE = 100 // wave stroke width
 const WAVE_Y_OFFSET = 70 // vertical shift of the wave rows
 const WAVE_PHASE = 0 // horizontal phase of the sine (radians)
 const BAND_SIZE = 182 // label band height
-const HATCH_SIZE = 40 // crosshatch line thickness
 const SPIRAL_SIZE = 92 // spiral stroke width
 const SPIRAL_GAP = 184 // spacing between spiral turns
 const SHAPE_SIZE = 256 // symbol half-width
@@ -110,6 +110,10 @@ const DIAG_SIZE = 100 // diagonal stripe thickness
 const BURST_RAYS = 8 // sunburst ray count
 const BURST_SIZE = 100 // sunburst overshoot past the label corners
 const SPLIT_CURVE = 200 // diagonal split bow — control-point offset, actual bulge is half this
+const VEE_SIZE = 120 // V chevron stroke width
+const TARGET_SIZE = 84 // bullseye ring stroke width
+const TARGET_GAP = 148 // spacing between bullseye rings (center to center)
+const EX_SIZE = 120 // big-X stroke width
 
 // Can size relative to the canvas — scaled about the canvas center (762, 762)
 const CAN_SCALE = 0.9
@@ -119,14 +123,6 @@ const droop = (x: number): number => {
   const t = (x - CX) / RX
   return PATTERN_CURVE * Math.sqrt(Math.max(0, 1 - t * t))
 }
-
-// Map a cylinder-surface point to screen coords. a is the angle along the
-// visible front arc (0 = left rim, π/2 = center, π = right rim); v is height
-// on the flat label. Same parameterization as the polkadot/symbol grid.
-const onCylinder = (a: number, v: number): [number, number] => [
-  CX - RX * Math.cos(a),
-  v + PATTERN_CURVE * Math.sin(a),
-]
 
 // horizontal band with elliptical top/bottom edges — a ring around the cylinder
 function ring(y: number, h: number, fill: string): string {
@@ -261,23 +257,23 @@ function pattern(type: number, rand: Rand, color: string): string {
       return shapes.join("")
     }
     case 1: {
-      // sawtooth — thin saw-toothed lines (sharp zigzag),
-      // fixed thickness and tooth size, evenly spaced, drooped onto the
-      // cylinder; the count draw always collapses to 5 (floor(rand()+2) is
-      // always 2) — kept anyway because dropping a draw would shift every
-      // later draw and change every existing identicon, see DESIGN.md
-      const count = 3 + Math.floor(rand() + 2)
-      const step = (L.h + EDGE_RY) / count
-      const pinAnchor = L.x - 20
-      for (let i = 0; i < count; i++) {
-        const base = L.y + (i + 0.5) * step
+      // chevrons — a stack of CHEVRON_COUNT upward "^" marks: apex at the
+      // horizontal center, two legs sweeping down to the sides. CHEVRON_BOW < 1
+      // bows the legs outward (convex) while the apex stays pointed. Each point
+      // is drooped onto the cylinder. The stack is centered in the label so
+      // exactly CHEVRON_COUNT render. Fixed geometry, nothing seeded.
+      const firstApex =
+        L.y + L.h / 2 - CHEVRON_DROP / 2 - ((CHEVRON_COUNT - 1) / 2) * CHEVRON_SPACING
+      for (let i = 0; i < CHEVRON_COUNT; i++) {
+        const apexY = firstApex + i * CHEVRON_SPACING + CHEVRON_SIZE / 2
         const pts: string[] = []
-        for (let px = pinAnchor + PIN_PHASE; px <= x2 + 20 + PIN_GAP; px += PIN_GAP) {
-          const tooth = Math.floor((px - pinAnchor) / PIN_GAP)
-          pts.push(`${n(px)},${n(base + (tooth % 2 ? PIN_TOOTH : -PIN_TOOTH) + droop(px))}`)
+        for (let px = L.x - 20; px <= x2 + 20; px += 18) {
+          const t = Math.min(1, Math.abs(px - CX) / RX)
+          const y = apexY + CHEVRON_DROP * Math.pow(t, CHEVRON_BOW)
+          pts.push(`${n(px)},${n(y + droop(px))}`)
         }
         shapes.push(
-          `<polyline points="${pts.join(" ")}" fill="none" stroke="${color}" stroke-width="${PIN_SIZE}"/>`,
+          `<polyline points="${pts.join(" ")}" fill="none" stroke="${color}" stroke-width="${CHEVRON_SIZE}" stroke-linejoin="round" stroke-linecap="round"/>`,
         )
       }
       return shapes.join("")
@@ -336,41 +332,9 @@ function pattern(type: number, rand: Rand, color: string): string {
       return shapes.join("")
     }
     case 5: {
-      // crosshatch — two mirrored sets of 45° diagonals on the cylinder
-      // unwrap (straight in arc×height space, then mapped through
-      // onCylinder); fixed thickness, only spacing varies. Each family is
-      // phase-anchored to its rim corner (slash → top-left at a=0,
-      // backslash → top-right at a=π); arc range slightly overshoots [0, π]
-      // for clean stroke clipping at the sides.
-      const spacing = HATCH_SIZE * 7
-      const v0Step = spacing * Math.SQRT2
-      const arcOvershoot = (EDGE_RY + HATCH_SIZE) / RX
-      const a0 = -arcOvershoot
-      const a1 = Math.PI + arcOvershoot
-      const steps = Math.ceil(((a1 - a0) * RX) / 30)
-      const v0First = L.y - Math.ceil((L.h + spacing) / v0Step) * v0Step
-      const v0Last = L.y + L.h + spacing + RX * Math.PI
-      for (const dir of [1, -1]) {
-        const v0Off = dir === 1 ? 0 : RX * Math.PI
-        for (let v0 = v0First + v0Off; v0 < v0Last + v0Off; v0 += v0Step) {
-          const pts: string[] = []
-          for (let i = 0; i <= steps; i++) {
-            const a = a0 + (i / steps) * (a1 - a0)
-            const v = dir === 1 ? v0 + RX * a : v0 - RX * a
-            const [px, py] = onCylinder(a, v)
-            pts.push(`${n(px)},${n(py)}`)
-          }
-          shapes.push(
-            `<polyline points="${pts.join(" ")}" fill="none" stroke="${color}" stroke-width="${HATCH_SIZE}"/>`,
-          )
-        }
-      }
-      return shapes.join("")
-    }
-    case 6: {
       // diagonal stripes — one set of 45° diagonals drooped onto the
-      // cylinder (crosshatch minus the mirror); fixed thickness, only
-      // spacing/offset/direction vary. Ends overshoot the clip.
+      // cylinder; fixed thickness, only spacing/offset/direction vary. Ends
+      // overshoot the clip.
       const spacing = DIAG_SIZE * 3
       const dir = rand() < 0.5 ? 1 : -1
       for (let x = L.x - L.h - spacing; x < x2; x += spacing) {
@@ -388,7 +352,7 @@ function pattern(type: number, rand: Rand, color: string): string {
       }
       return shapes.join("")
     }
-    case 7: {
+    case 6: {
       // spiral — one archimedean spiral from the label center outward,
       // drooped onto the cylinder; nothing seeded, identical on every can.
       // The droop at the can center is PATTERN_CURVE, so cy is set back by
@@ -407,7 +371,7 @@ function pattern(type: number, rand: Rand, color: string): string {
         `stroke-width="${SPIRAL_SIZE}" stroke-linecap="round"/>`
       )
     }
-    case 8: {
+    case 7: {
       // sunburst — wedge rays radiating from the label center, overshooting
       // the clip; nothing seeded, identical on every sunburst can. Drawn
       // flat, dead center on the label.
@@ -424,27 +388,27 @@ function pattern(type: number, rand: Rand, color: string): string {
       }
       return shapes.join("")
     }
-    case 9: {
+    case 8: {
       // hearts — symbolGrid of the heart shape
       return symbolGrid(0, color)
     }
-    case 10: {
+    case 9: {
       // clubs — symbolGrid of the club shape
       return symbolGrid(1, color)
     }
-    case 11: {
+    case 10: {
       // stars — symbolGrid of the rounded star shape
       return symbolGrid(2, color)
     }
-    case 12: {
+    case 11: {
       // rings — symbolGrid of the ring shape
       return symbolGrid(3, color)
     }
-    case 13: {
+    case 12: {
       // bolts — symbolGrid of the lightning bolt shape
       return symbolGrid(4, color)
     }
-    case 14: {
+    case 13: {
       // diagonal split — the label's bottom-right half in the pattern color,
       // corner to corner; the top-left half stays the can color. The split
       // line is a quadratic bowed by SPLIT_CURVE toward the pattern side
@@ -457,6 +421,70 @@ function pattern(type: number, rand: Rand, color: string): string {
         `<path d="M ${L.x} ${y2} Q ${n(cx)} ${n(cy)} ${x2} ${L.y} L ${x2 + 60} ${L.y} ` +
         `L ${x2 + 60} ${yMax + 60} L ${L.x - 60} ${yMax + 60} Z" fill="${color}"/>`
       )
+    }
+    case 14: {
+      // vee — a single bold V spanning the whole label: two legs running from
+      // the top corners down to a point at the bottom center, drooped onto the
+      // cylinder like the other strokes so it wraps around the can. Reads as a
+      // V from top to bottom. Nothing seeded, identical on every vee can.
+      const apexY = y2 - VEE_SIZE / 2 // pull the tip up so the round cap sits on the label
+      const steps = 24
+      const pts: string[] = []
+      // top-left corner → apex
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps
+        const px = L.x + (CX - L.x) * t
+        pts.push(`${n(px)},${n(L.y + (apexY - L.y) * t + droop(px))}`)
+      }
+      // apex → top-right corner
+      for (let i = 1; i <= steps; i++) {
+        const t = i / steps
+        const px = CX + (x2 - CX) * t
+        pts.push(`${n(px)},${n(apexY - (apexY - L.y) * t + droop(px))}`)
+      }
+      return (
+        `<polyline points="${pts.join(" ")}" fill="none" stroke="${color}" ` +
+        `stroke-width="${VEE_SIZE}" stroke-linejoin="round" stroke-linecap="round"/>`
+      )
+    }
+    case 15: {
+      // bullseye — concentric rings growing from the label center. Drawn flat
+      // (plain circles centered on the label), like the sunburst; the innermost
+      // gap stays can-color, reading as the bull's-eye. Nothing seeded.
+      const cy = L.y + L.h / 1.9
+      const maxR = Math.hypot(RX, L.h / 2) + TARGET_GAP
+      for (let r = TARGET_GAP; r <= maxR; r += TARGET_GAP) {
+        const pts: string[] = []
+        for (let t = 0; t <= 2 * Math.PI + 0.01; t += 0.12) {
+          const px = CX + r * Math.cos(t)
+          pts.push(`${n(px)},${n(cy + r * Math.sin(t))}`)
+        }
+        shapes.push(
+          `<path d="M ${pts.join(" L ")} Z" fill="none" stroke="${color}" stroke-width="${TARGET_SIZE}"/>`,
+        )
+      }
+      return shapes.join("")
+    }
+    case 16: {
+      // big X — two bold diagonals corner to corner, drooped onto the cylinder.
+      // Nothing seeded.
+      const steps = 24
+      for (const [ax, ay, bx, by] of [
+        [L.x, L.y, x2, y2],
+        [x2, L.y, L.x, y2],
+      ]) {
+        const pts: string[] = []
+        for (let i = 0; i <= steps; i++) {
+          const t = i / steps
+          const px = ax + (bx - ax) * t
+          pts.push(`${n(px)},${n(ay + (by - ay) * t + droop(px))}`)
+        }
+        shapes.push(
+          `<polyline points="${pts.join(" ")}" fill="none" stroke="${color}" ` +
+            `stroke-width="${EX_SIZE}" stroke-linecap="round"/>`,
+        )
+      }
+      return shapes.join("")
     }
     default: {
       // wavy split — the label's bottom half in the pattern color, from the
@@ -486,10 +514,33 @@ const SILHOUETTE_D =
   "M 120 372 L 120 1150 L 127 1252 A 325 143 0 0 0 777 1252 L 784 1150 L 784 372 " +
   "L 784 368 L 702 264 Q 458 200 205 264 L 122 362 Z"
 
-// label region (also the pattern clip): top and bottom edges follow the rim curvature
-const LABEL_D =
-  `M ${L.x} ${L.y} A ${RX} ${EDGE_RY} 0 0 0 ${L.x + L.w} ${L.y} ` +
-  `L ${L.x + L.w} ${L.y + L.h} A ${RX} ${EDGE_RY} 0 0 1 ${L.x} ${L.y + L.h} Z`
+// The label's top edge is the can's exact top/body divider curve, traced from
+// soda-can.svg (same template space as everything else). The divider is an
+// asymmetric curve that dips ~60px at the center — an ellipse can't match it, so
+// clipping to an arc left a can-color sliver (or overshoot) against the black
+// divider line. Tracing the real curve makes every pattern clip flush to it.
+// Regenerate alongside the artwork if soda-can.svg changes (like SILHOUETTE_D).
+const DIVIDER_TOP =
+  "M 126 375.438 L 142.603 385.436 " +
+  "C 173.711 404.168 238.442 420.693 315 429.445 " +
+  "C 358.87 434.461 493.156 434.477 543 429.472 " +
+  "C 592.165 424.535 643.995 415.88 681.829 406.29 " +
+  "C 715.094 397.858 754.432 383.587 763.668 376.602 " +
+  "C 766.875 374.176 770.513 372.148 771.75 372.095"
+// The bottom edge is the can's exact body/foot divider, traced from soda-can.svg
+// (right→left). Its end anchors are pushed out to the full label width (774 / 126)
+// so the clip's sides stay vertical — the raw traced corners (x 768 / 135) sit
+// inside the body, which would expose can color along the sides. An ellipse arc
+// here spilled the pattern onto the foot and past the outline at the corners.
+const DIVIDER_BOTTOM =
+  "L 774 1246.712 " +
+  "C 751.383 1284.006 672.87 1315.832 556.5 1332.576 " +
+  "C 515.791 1338.434 391.792 1337.512 345 1331.005 " +
+  "C 296.473 1324.256 244.599 1312.6 214.908 1301.773 " +
+  "C 167.876 1284.622 135.488 1259.76 126 1240.5"
+// label region (also the pattern clip): top and bottom follow the can's real
+// divider curves; the sides are the implied vertical edges (right L, left Z)
+const LABEL_D = DIVIDER_TOP + " " + DIVIDER_BOTTOM + " Z"
 
 // Memoization: identican is pure (same inputs → identical SVG), so results are
 // cached. Bounded FIFO — drop the oldest entry past the cap; an LRU isn't worth it.
@@ -551,7 +602,7 @@ export function identican(seed: string, options: IdenticanOptions = {}): string 
   // variety while the large background area stays on the clean grid.
   const baseHue = Math.floor(rand() * 20) * 18
   const canOffset = [150, 165, 195, 210][Math.floor(rand() * 4)]
-  const patternType = Math.floor(rand() * 16)
+  const patternType = Math.floor(rand() * 18)
   const canHue = baseHue + canOffset
   const patternHue = canHue + (rand() < 0.5 ? 120 : -120)
   const patternSat = 55 + rand() * 25
@@ -605,7 +656,7 @@ export function identican(seed: string, options: IdenticanOptions = {}): string 
     `<defs>` +
     (background === "gradient"
       ? `<linearGradient id="${id}-bg" x1="0" y1="0" x2="1" y2="1">` +
-        `<stop offset="0.3" stop-color="${bgA}"/><stop offset="1" stop-color="${bgB}"/>` +
+        `<stop offset="0" stop-color="${bgA}"/><stop offset="1" stop-color="${bgB}"/>` +
         `</linearGradient>`
       : "") +
     `<linearGradient id="${id}-hl">` +
