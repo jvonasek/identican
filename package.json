@@ -34,6 +34,7 @@
     "test": "npm run build && node --test",
     "demo": "node scripts/demo.mjs",
     "benchmark": "npm run build && node benchmark/node.js",
+    "benchmark:page": "node scripts/benchmark-page.mjs",
     "dev": "node --watch-path=./src --watch-path=./scripts/templates --watch-path=./scripts/themes scripts/demo.mjs",
     "format": "prettier --write .",
     "prepublishOnly": "npm test"

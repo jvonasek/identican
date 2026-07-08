@@ -34,7 +34,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run demo
-      - run: mkdir -p _site && mv index.html _site/
+      - run: npm run benchmark:page
+      - run: mkdir -p _site && mv index.html benchmark.html _site/
       - uses: actions/upload-pages-artifact@v3
       - id: deployment
         uses: actions/deploy-pages@v4
