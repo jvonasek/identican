@@ -17,6 +17,7 @@
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { darkMode: "class" };</script>
+  <style>html.dark { color-scheme: dark; }</style>
 </head>
 <body class="min-h-screen bg-zinc-100 text-zinc-900 antialiased dark:bg-zinc-900 dark:text-zinc-100">
   <div class="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">

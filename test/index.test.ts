@@ -155,9 +155,9 @@ test("aria: hidden by default, labelled via title, label escaped", () => {
 test("zoom scales the viewBox with an auto vertical pan", () => {
   // no zoom → full frame
   assert.ok(identican("hello").includes('viewBox="0 0 1524 1524"'))
-  // zoom 1.4 → size 1524/1.4 ≈ 1088.6, y pan -15%: x=(0.5-0.5/1.4)*1524≈217.7,
-  // y=(0.5-0.5/1.4-0.15)*1524≈-10.9
-  assert.ok(identican("hello", { zoom: 1.4 }).includes('viewBox="217.7 -10.9 1088.6 1088.6"'))
+  // zoom 1.4 → size 1524/1.4 ≈ 1088.6, y pan -33%*(1.4-1)=-13.2%:
+  // x=(0.5-0.5/1.4)*1524≈217.7, y=(0.5-0.5/1.4-0.132)*1524≈16.5
+  assert.ok(identican("hello", { zoom: 1.4 }).includes('viewBox="217.7 16.5 1088.6 1088.6"'))
   // zoom <1 zooms out (larger viewBox), can stays centered (no y pan)
   assert.ok(identican("hello", { zoom: 0.5 }).includes('viewBox="-762 -762 3048 3048"'))
   // zoom is part of the cache key / id — different zoom, different output
@@ -310,28 +310,28 @@ test("Identican theme carries the palette", () => {
 // If you did NOT intend a visual change, your change reordered/added/removed
 // a rand() draw or altered emitted markup: fix that instead.
 const GOLDEN: [string, Parameters<typeof identican>[1], string][] = [
-  ["hello", {}, "be1c7298974dea3a50e852a65dfe6e8d5ebf8795d623c101259540f516c34f58"],
-  ["", {}, "5946ace441819adc1d34824df23542cf9dd5c09c55de15bab1887d4236fbea54"],
-  ["user-0", {}, "f3d0c47276cd088706a8f4aeba7f498e2621b03c529f9ef2cc11ba1005e7dcd8"],
+  ["hello", {}, "834fddfe0bcaea35640a29c692affba21d06e5d88e87179aca09f114d89f4afe"],
+  ["", {}, "3ac3b8e654b15f95e5ed909c85509a9de78fe2dacb8d5c94e0ae252f910b7695"],
+  ["user-0", {}, "e1adfac4fb8a51b5f88bda5d684936f426dcc6db2ac66f1d10dccb47619c2639"],
   [
     "user-1",
     { background: "solid" },
-    "d75b1168bd727676ac328a100f1fd94d51419643e450c600955c04b44bdf1ac4",
+    "1bbbb1ad22be6f404368426299fcfae10839e321b9df348c917ebe978ee81b8e",
   ],
   [
     "user-2",
     { background: "none", saturation: 0.5, lightness: 1.3 },
-    "a492dfb8e2399d263333a9ee6b576e889ae61aa300061a73914971900392fc6a",
+    "ddc3d17249e6469c3a5f1d0fb2f8866255c3256622bf9320b7d13fbf523bcfcd",
   ],
   [
     "user@example.com",
     { size: 64 },
-    "65b11cd8126b0e4c7bc6ed388611187560a9d7abdf13963e60d482823d4a8638",
+    "45f5c8d797bff6720ed5cd668d31852651cdef069dca977a0834cd101cf4026b",
   ],
   [
     "user-3",
     { palette: { backgrounds: ["#0a0a0a"], cans: ["#e11d48"], patterns: ["#22d3ee"] } },
-    "b640eda2afa4d27e5fa59d247e4d412edb074baf4ee88fa3f0be5f62778e6049",
+    "9e9dc6bc262c241f1137d1ebbf9548c361df35dca91cb928e0ae7bd083b83296",
   ],
 ]
 

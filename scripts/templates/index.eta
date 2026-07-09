@@ -27,6 +27,9 @@ const applySliderParam = (key, input) => {
 applySliderParam("z", zoom);
 applySliderParam("s", sat);
 applySliderParam("l", light);
+// ?seed= — set the seed input's default
+const seedParam = params.get("seed");
+if (seedParam !== null) seed.value = seedParam;
 let onThemeChange = null; // set to render() once it exists; re-renders on light/dark switch
 const themeKey = "identican-theme";
 const themeSwitcher = document.getElementById("theme-switcher");
@@ -45,6 +48,7 @@ const applyTheme = (theme) => {
     btn.classList.toggle("text-zinc-900", active);
     btn.classList.toggle("dark:text-zinc-100", active);
     btn.setAttribute("aria-pressed", active);
+    btn.querySelector(".theme-check").toggleAttribute("hidden", !active);
   });
   onThemeChange?.();
 };
@@ -74,7 +78,42 @@ setTheme(localStorage.getItem(themeKey) || "system");
 const sizes = [128, 96, 80, 64, 48, 32];
 const bgButtons = document.querySelectorAll(".bg-btn");
 let bg = "gradient";
+let shape = "squircle";
+const cornerRadius = (s) =>
+  shape === "square" ? "0" : shape === "round" ? "100%" : `${Math.min(12, s / 8)}px`;
+document.querySelectorAll(".shape-radio").forEach((radio) =>
+  radio.addEventListener("change", () => {
+    shape = radio.value;
+    render();
+  })
+);
+// ?shape=square|squircle|round — set the shape control's default
+const shapeParam = params.get("shape");
+const shapeRadio = shapeParam && document.querySelector(`.shape-radio[value="${shapeParam}"]`);
+if (shapeRadio) {
+  shapeRadio.checked = true;
+  shape = shapeParam;
+}
+// mirror the controls back into the query string so any state is shareable;
+// values equal to the default are dropped to keep URLs clean (?theme= is left untouched)
+const URL_DEFAULTS = { seed: "", bg: "gradient", shape: "squircle", z: "1", s: "1", l: "1" };
+const syncUrl = () => {
+  const next = new URLSearchParams(location.search);
+  const set = (key, value) => {
+    if (value === URL_DEFAULTS[key]) next.delete(key);
+    else next.set(key, value);
+  };
+  set("seed", seed.value);
+  set("bg", bg);
+  set("shape", shape);
+  set("z", String(+zoom.value));
+  set("s", String(+sat.value));
+  set("l", String(+light.value));
+  const qs = next.toString();
+  history.replaceState(null, "", qs ? `?${qs}` : location.pathname);
+};
 const render = () => {
+  syncUrl();
   // theme fixed for this render pass; size passed per call
   const themeOpts = activeTheme ? activeTheme.options(resolvedTheme()) : {};
   const can = new Identican({ ...themeOpts, background: bg, saturation: +sat.value, lightness: +light.value, zoom: +zoom.value });
@@ -83,11 +122,12 @@ const render = () => {
   document.getElementById("zoom-val").textContent = (+zoom.value).toFixed(2);
   document.getElementById("preview").innerHTML = sizes
     .map((s) => `<figure class="shrink-0 text-center">
-      <div class="overflow-hidden shadow-sm ring-1 ring-zinc-200/70 dark:ring-zinc-700/70" style="border-radius:${Math.min(12, s / 8)}px">${can(seed.value, { size: s }).toSvg()}</div>
+      <div class="overflow-hidden" style="border-radius:${cornerRadius(s)}">${can(seed.value, { size: s }).toSvg()}</div>
       <figcaption class="mt-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">${s}px</figcaption>
     </figure>`)
     .join("");
   document.querySelectorAll("[data-seed]").forEach((cell) => {
+    cell.style.borderRadius = cornerRadius(<%= it.gallerySize %>);
     cell.innerHTML = can(cell.dataset.seed, { size: <%= it.gallerySize %> }).toSvg();
   });
 };
@@ -116,6 +156,8 @@ sat.addEventListener("input", render);
 light.addEventListener("input", render);
 zoom.addEventListener("input", render);
 onThemeChange = render;
-setBg("gradient");
+// ?bg=gradient|solid|none — initial background; invalid values fall back to gradient
+const bgParam = params.get("bg");
+setBg(["gradient", "solid", "none"].includes(bgParam) ? bgParam : "gradient");
 </script>
 <% }) %>

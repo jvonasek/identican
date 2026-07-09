@@ -37,7 +37,7 @@ const GALLERY_SIZE = 128
 
 const can = new Identican()
 const cells = Array.from({ length: 64 }, (_, i) => ({
-  seed: `can-${i + 1}`,
+  seed: `user-${i + 1}`,
   svg: can(`a${i + 1}`, { size: GALLERY_SIZE }).toSvg(),
 }))
 
